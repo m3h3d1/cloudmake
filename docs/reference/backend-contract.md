@@ -43,6 +43,7 @@ User aliases are short; canonical names identify transport explicitly:
 | `colab-ssh` | `colab-ssh` | deprecated | SSH and rsync | `unsupported` |
 | `ssh` | `host-ssh` | supported | User-managed SSH and rsync | `native` |
 | `lightning` | `lightning-studio-ssh` | unqualified | SSH and rsync | `native` |
+| `modal` | `modal-sandbox` | unqualified | Modal Sandbox SDK file and exec APIs | `native` (Modal Volume) |
 
 An alias must not silently change transport. In particular, `colab` always
 means native notebook access and never falls back to SSH.

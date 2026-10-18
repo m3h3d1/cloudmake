@@ -3,6 +3,19 @@
 All notable changes are recorded here. Cloudmake follows semantic versioning
 once a version is published as a GitHub release.
 
+## Unreleased
+
+- Add the unqualified `modal-sandbox` backend (alias `modal`). It starts or
+  reuses one named Modal Sandbox per project through the official Python SDK,
+  uploads a fingerprinted source archive only when the source changed, runs
+  project targets with plain Make, collects artifacts, and supports `--status`,
+  `--stop`, and `--shell` (`modal shell`). `--persist` mounts a per-project
+  Modal Volume as the workspace. Defaults: 1 CPU core, 8 GiB memory, 30-minute
+  idle stop, 24-hour limit. Offline SDK doubles cover the flow; the live gate
+  has not run.
+- Map a positively classified capacity shortage (`capacity_unavailable`) to
+  exit status 75 alongside readiness-deadline failures.
+
 ## 2.4.0 - 2026-09-12
 
 Compatibility note: this release deliberately takes one minor-version contract

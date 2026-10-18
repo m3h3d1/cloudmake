@@ -1,8 +1,9 @@
 # Test suite
 
 The default suite is deliberately offline. Provider integration tests put fake
-`colab`, `kaggle`, `gh`, `gcloud`, `lightning`, `ssh`, and `rsync` executables at the front
-of `PATH`; they never allocate cloud compute or use account credentials.
+`colab`, `kaggle`, `gh`, `gcloud`, `lightning`, `modal`, `ssh`, and `rsync` executables at the front
+of `PATH`, and an offline `modal` SDK double from `fixtures/fake_modal/` on
+`PYTHONPATH`; they never allocate cloud compute or use account credentials.
 
 The directory layout is part of the test contract:
 

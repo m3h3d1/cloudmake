@@ -49,6 +49,7 @@ help:
 	@echo 'Notebook backends: colab-notebook (default), kaggle-notebook'
 	@echo 'SSH backends: codespaces-ssh, gcp-compute-ssh, host-ssh, lightning-studio-ssh'
 	@echo 'Historical SSH backend: colab-ssh'
+	@echo 'SDK backends: modal-sandbox'
 	@echo
 	@echo 'Engine operations: start status stop sync collect fetch shell'
 	@echo '                   sync-dry-run prerequisites doctor backend-info'

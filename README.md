@@ -28,7 +28,7 @@ Provider notebooks, transfer logic, session metadata, and generated control file
 belong to the cloudmake tool, not to the project.
 
 > [!IMPORTANT]
-> The seven documented backends and the external-project `cloudmake` launcher are
+> The eight documented backends and the external-project `cloudmake` launcher are
 > implemented. The regression suite uses offline provider doubles; configure and
 > verify your own account with `cloudmake --doctor` before allocating compute.
 
@@ -485,6 +485,7 @@ Short names are for people; canonical names describe the transport unambiguously
 | `colab-ssh` | `colab-ssh` | Deprecated | SSH and rsync |
 | `ssh` | `host-ssh` | Supported | User-managed SSH and rsync |
 | `lightning` | `lightning-studio-ssh` | Unqualified | SSH and rsync |
+| `modal` | `modal-sandbox` | Unqualified | Modal Sandbox SDK file and exec APIs |
 
 `colab` always means native notebook access. It never silently changes to SSH.
 
@@ -1006,6 +1007,7 @@ The flag has an explicit backend-dependent implementation:
 | `codespaces-ssh` | `native` | Use the Codespace's `/workspaces` storage across stop/start while that Codespace exists. |
 | `gcp-compute-ssh` | `native` | Use the attached persistent disk across stop/start; no checkpoint transfer occurs. |
 | `lightning-studio-ssh` | `native` | Use the Studio's provider-persistent workspace while that Studio exists. |
+| `modal-sandbox` | `native` | Mount a per-project Modal Volume as the workspace so it survives sandbox replacement; no checkpoint transfer occurs. |
 | `kaggle-notebook` | `checkpoint` | Alternate two private kernel-output slots; restore the last completed workspace cloud-to-cloud and publish its successor after Make. |
 | `colab-ssh` | `unsupported` | Reject because this transport has no cross-VM checkpoint store for the ephemeral Colab VM. |
 
@@ -1596,6 +1598,64 @@ settings, and readable provider SSH key without allocating compute. A provider
 eligibility, credit, or capacity failure can only be proven when `--start` or a
 project target requests a machine.
 
+### Modal Sandbox backend
+
+[Modal Sandboxes](https://modal.com/docs/guide/sandboxes) provide per-second
+CPU and GPU containers (T4 through B200). This adapter is currently
+**unqualified**: its offline provider simulations pass, but no live release
+gate has been retained. Cloudmake drives one named sandbox per project through
+the official Python SDK's file and exec APIs; there is no SSH or rsync. The
+source is fingerprinted and uploaded as an archive only when it changed, and
+project targets run with plain Make under `/cloudmake/src`.
+
+Prerequisites:
+
+1. A [Modal account](https://modal.com/signup). The Starter plan includes a
+   monthly credit; GPU, CPU, and memory are billed per second, and Sandbox CPU
+   and memory cost more than standard Functions.
+2. The official CLI and SDK, then a token:
+
+   ```sh
+   uv tool install modal
+   modal token new
+   modal profile current
+   ```
+
+   Cloudmake runs its controller with the interpreter of the `modal` command
+   (for `uv tool`, its private environment). Set `MODAL_PYTHON` if the SDK
+   lives elsewhere.
+
+Verify the read-only gate and select the backend:
+
+```sh
+cloudmake -b modal --doctor
+cloudmake --use modal --gpu=T4
+# Replace PROJECT_TARGET with a target provided by the project's Makefile.
+cloudmake PROJECT_TARGET
+cloudmake -b modal --stop
+```
+
+Accelerator values are Modal GPU names such as `T4`, `L4`, `A10`, `L40S`,
+`A100-40GB`, `A100-80GB`, or `H100`; omit `--gpu` for a CPU sandbox. Defaults
+are 1 CPU core and 8 GiB memory (`MODAL_CPU`, `MODAL_MEMORY`). A sandbox stops
+itself after `MODAL_IDLE_TIMEOUT` seconds without a running command (default
+1800) and after `MODAL_TIMEOUT` seconds in total (default and Modal maximum
+86400). A reused sandbox must match the requested accelerator, size, image, and
+persistence; otherwise Cloudmake refuses and asks for `--stop`.
+
+The default image is Debian slim with Python, Make, and curl. Set
+`MODAL_IMAGE` to a registry reference (for example a CUDA development image)
+when the project needs another toolchain; it must provide `sh`, `make`, and
+`tar`. This is a backend setting, not the `--image` OCI runner.
+
+`--persist` mounts the Modal Volume `cloudmake-<sandbox>` at `/cloudmake`, so
+project-generated state such as downloaded models or build trees survives
+`--stop` and the 24-hour limit. Remove it explicitly with
+`modal volume delete cloudmake-<sandbox>`. `--shell` opens `modal shell` in the
+running sandbox. `--fetch` never allocates a sandbox. `--image`,
+`--devcontainer`, port forwarding, `--retry-for`, and `--environment` are not
+supported in this release.
+
 ## Backend behavior summary
 
 The three service-adapter roles are visible in each backend's contract:
@@ -1610,6 +1670,7 @@ The three service-adapter roles are visible in each backend's contract:
 | `colab-ssh` | Deprecated | Provider-managed | Ephemeral | No | Adapter | Unsupported | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
 | `host-ssh` | Supported | Externally managed | Host-persistent | No | Adapter | Host filesystem | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
 | `lightning-studio-ssh` | Unqualified | Provider-managed | Stop-persistent | No | Adapter | Studio filesystem | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
+| `modal-sandbox` | Unqualified | Provider-managed | Ephemeral; Volume with `--persist` | No | No | Modal Volume | Unsupported | Fingerprinted archive via the Modal SDK |
 
 Network direction is a separate backend property, not an implication of the
 transport:
@@ -1622,6 +1683,7 @@ transport:
 | `codespaces-ssh` | conditional on GitHub port-forwarding visibility and policy | yes |
 | `gcp-compute-ssh` | conditional on VPC/firewall and forwarding policy | conditional on VPC/firewall and organization policy |
 | `lightning-studio-ssh` | conditional on provider configuration | conditional on provider/account policy |
+| `modal-sandbox` | no | yes |
 
 Authenticated provider control is not public inbound connectivity. For
 example, `colab exec` can submit work over Google's runtime proxy even though
@@ -1723,7 +1785,8 @@ experiments, and release procedure are indexed separately in the
 
 The default test suite is offline by design. It never connects to a cloud
 account or allocates compute. Integration tests place fake `colab`, `kaggle`,
-`gh`, `lightning`, `ssh`, and `rsync` executables at the front of `PATH`, then
+`gh`, `lightning`, `modal`, `ssh`, and `rsync` executables at the front of
+`PATH` (plus an offline `modal` SDK double on `PYTHONPATH`), then
 exercise the real Makefiles, transports, notebooks, and Python helpers against
 temporary projects.
 
@@ -1734,7 +1797,7 @@ python3 -m pip install -r requirements-test.txt
 python3 -m pytest
 ```
 
-The suite covers portable Make behavior, all seven backends, source selection,
+The suite covers portable Make behavior, all eight backends, source selection,
 provider lifecycle and failures, prerequisites, ownership, locks, status
 normalization, and transactional source and artifact handling. Fake-provider
 tests also assert architecture boundaries such as no SSH in the native Colab

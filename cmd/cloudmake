@@ -59,6 +59,8 @@ ALIASES = {
     "host-ssh": "host-ssh",
     "lightning": "lightning-studio-ssh",
     "lightning-studio-ssh": "lightning-studio-ssh",
+    "modal": "modal-sandbox",
+    "modal-sandbox": "modal-sandbox",
 }
 BACKENDS = {
     "local": ("yes", "direct Make invocation", "make"),
@@ -69,6 +71,7 @@ BACKENDS = {
     "colab-ssh": ("yes", "paid-tier SSH and rsync", "colab"),
     "host-ssh": ("yes", "user-managed SSH and rsync", "ssh"),
     "lightning-studio-ssh": ("yes", "persistent Studio SSH and rsync", "lightning"),
+    "modal-sandbox": ("yes", "Modal Sandbox SDK", "modal"),
 }
 EX_TEMPFAIL = getattr(os, "EX_TEMPFAIL", 75)
 GPU_BACKENDS = {
@@ -76,6 +79,7 @@ GPU_BACKENDS = {
     "kaggle-notebook",
     "colab-ssh",
     "lightning-studio-ssh",
+    "modal-sandbox",
 }
 CAPACITY_RETRY_BACKENDS = {"colab-notebook"}
 PERSISTENCE_MODES = {
@@ -87,6 +91,7 @@ PERSISTENCE_MODES = {
     "colab-ssh": "unsupported",
     "host-ssh": "native",
     "lightning-studio-ssh": "native",
+    "modal-sandbox": "native",
 }
 ACTION_OPTIONS = {
     "--backends": "backends",
@@ -131,6 +136,7 @@ RESERVED_ASSIGNMENTS = {
     "CLOUDMAKE_OCI_RUNTIMES_B64",
     "CLOUDMAKE_OPERATION_STATE",
     "CLOUDMAKE_CHECKPOINT",
+    "CLOUDMAKE_NATIVE_PERSIST",
     "CLOUDMAKE_PROJECT_KEY",
     "CLOUDMAKE_WORKSPACE_ID",
     "CLOUDMAKE_PROJECT_ARGS_B64",
@@ -750,7 +756,7 @@ Persistence selection: --persist/--no-persist are local and per project;
 Persistence modes: Colab notebook=encrypted checkpoint; deprecated Kaggle=
                    experimental private-output checkpoint;
                    local/persistent SSH=native storage; GCP disk=native
-                   storage (no transfer);
+                   storage (no transfer); Modal=native Volume (no transfer);
                    Colab SSH=unsupported.
 Artifacts: --collect DIR TARGET runs that target and fetches project-relative DIR
            into .cloudmake/artifacts/.
@@ -1910,6 +1916,7 @@ def engine_command(
     remote_collect_dir: str | None = None,
     run_id: str | None = None,
     checkpoint: bool = False,
+    native_persist: bool = False,
     colab_session: str | None = None,
     operation_state: Path | None = None,
     runner: str = "native",
@@ -1930,6 +1937,7 @@ def engine_command(
         f"CLOUDMAKE_PROJECT_KEY={key}",
         f"CLOUDMAKE_WORKSPACE_ID={workspace_id}",
         f"CLOUDMAKE_CHECKPOINT={1 if checkpoint else 0}",
+        f"CLOUDMAKE_NATIVE_PERSIST={1 if native_persist else 0}",
         "PROJECT_MAKEFILE=Makefile",
         f"ARTIFACT_DIR={project / COLLECTION_RELATIVE}",
         f"CLOUDMAKE_STATE_ROOT={state_home / 'projects' / key}",
@@ -2014,6 +2022,7 @@ def engine_command(
             "colab-ssh": "COLAB_GPU",
             "kaggle-notebook": "KAGGLE_ACCELERATOR",
             "lightning-studio-ssh": "LIGHTNING_MACHINE",
+            "modal-sandbox": "MODAL_GPU",
         }.get(backend, "CLOUDMAKE_GPU")
         variables.append(f"{variable}={accelerator or ''}")
     if remote_target is not None:
@@ -2609,6 +2618,7 @@ def run(arguments: list[str]) -> int:
         backend=backend, profile=devcontainer, accelerator=accelerator
     )
     managed_checkpoint = checkpoint and persistence_mode == "checkpoint"
+    native_persist = checkpoint and persistence_mode == "native"
     if action == "environment" and backend not in {
         "local", "colab-notebook", "gcp-compute-ssh"
     }:
@@ -2800,6 +2810,7 @@ def run(arguments: list[str]) -> int:
             remote_target=remote_target,
             remote_collect_dir=remote_collect_dir,
             checkpoint=managed_checkpoint,
+            native_persist=native_persist,
             colab_session=colab_session,
             operation_state=operation_state,
             runner=runner,
@@ -2820,7 +2831,7 @@ def run(arguments: list[str]) -> int:
         if (
             exit_code != 0
             and lifecycle.get("failure_code")
-            in {"readiness_deadline_exceeded", "readiness_deadline_cleanup_failed"}
+            in {"readiness_deadline_exceeded", "readiness_deadline_cleanup_failed", "capacity_unavailable"}
         ):
             exit_code = 75
         if managed_checkpoint:
@@ -3043,6 +3054,7 @@ def run(arguments: list[str]) -> int:
                 remote_collect_dir=remote_collect_dir,
                 run_id=run_id,
                 checkpoint=managed_checkpoint,
+                native_persist=native_persist,
                 colab_session=colab_session,
                 operation_state=operation_state,
                 runner=runner,
@@ -3115,7 +3127,7 @@ def run(arguments: list[str]) -> int:
     if (
         exit_code != 0
         and lifecycle.get("failure_code")
-        in {"readiness_deadline_exceeded", "readiness_deadline_cleanup_failed"}
+        in {"readiness_deadline_exceeded", "readiness_deadline_cleanup_failed", "capacity_unavailable"}
     ):
         exit_code = 75
     if backend == "local":

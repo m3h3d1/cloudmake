@@ -60,6 +60,7 @@ help:
 	@echo 'Local backend: local (direct project Make invocation)'
 	@echo 'Notebook backends: colab-notebook, kaggle-notebook'
 	@echo 'SSH backends: colab-ssh, codespaces-ssh, host-ssh, lightning-studio-ssh'
+	@echo 'SDK backends: modal-sandbox'
 	@echo
 	@echo 'Targets:'
 	@echo '  prerequisites  Check required local commands and settings'

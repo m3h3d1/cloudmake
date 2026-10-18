@@ -49,6 +49,8 @@ else ifeq ($(BACKEND_TRANSPORT),ssh)
 include $(CLOUDMAKE_TOOL_ROOT)/core/ssh.mk
 else ifeq ($(BACKEND_TRANSPORT),local)
 include $(CLOUDMAKE_TOOL_ROOT)/backend/local/transport.mk
+else ifeq ($(BACKEND_TRANSPORT),modal-sandbox)
+include $(CLOUDMAKE_TOOL_ROOT)/backend/modal-sandbox/transport.mk
 else
 $(error Backend "$(BACKEND)" has unknown BACKEND_TRANSPORT "$(BACKEND_TRANSPORT)")
 endif

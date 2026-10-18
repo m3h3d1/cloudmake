@@ -1048,6 +1048,9 @@ def test_backends_reports_persistence_mode_for_every_backend(
     assert rows["codespaces-ssh"][3:5] == ["provider-managed", "stop-persistent"]
     assert rows["host-ssh"][3:5] == ["externally-managed", "host-persistent"]
     assert rows["colab-ssh"][6] == "unsupported"
+    assert rows["modal-sandbox"][1:7] == [
+        "unqualified", "yes", "provider-managed", "ephemeral", "no", "native",
+    ]
     for backend in (
         "local",
         "colab-notebook",
@@ -1729,6 +1732,7 @@ def test_repository_configuration_cannot_choose_a_local_ssh_host(
         ("colab-ssh", "colab-ssh", ()),
         ("ssh", "host-ssh", ("--host", "lab-gpu")),
         ("lightning", "lightning-studio-ssh", ()),
+        ("modal", "modal-sandbox", ()),
     ],
 )
 def test_backend_aliases_have_unambiguous_canonical_names(
