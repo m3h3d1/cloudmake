@@ -263,3 +263,27 @@ makes no release-quality claim for the unexecuted G4 profile.
 
 The executable acceptance procedure lives with the harness under
 [`tests/acceptance/gcp-workstation`](../tests/acceptance/gcp-workstation/README.md).
+
+## Modal Sandbox
+
+> **Status:** Qualified as a paid-tier CPU and T4 GPU backend. The offline
+> provider simulation and the live gate pass with Modal client 1.6.2.
+
+The `modal-sandbox` adapter drives one named Modal Sandbox per project through
+the official Python SDK. It never uses SSH or rsync, and it creates only the
+sandbox, the shared `cloudmake` app, and, with `--persist`, the Volume
+`cloudmake-<sandbox>`. It never deletes a Volume.
+
+The live gate ran on 2026-10-18:
+
+| Check | Evidence |
+|---|---|
+| CPU start, reuse, shell, stop | `resource=started`, then `resource=reused` with the source upload skipped; `modal shell` opened; `--stop` terminated the sandbox |
+| T4 GPU | `Tesla T4` with a CUDA 12.8 `llama-bench` run (pp512 334 t/s, tg128 27.7 t/s) |
+| Volume persistence | after the sandbox ended, a new sandbox reused the Volume: source upload skipped and no model or library download |
+| Artifact collection | `--collect` extracted artifacts on both GPU runs |
+| Idle stop | a CPU sandbox ended itself 31 minutes after its last command (`MODAL_IDLE_TIMEOUT=1800`) without `--stop` |
+| Credentials | no Modal token value in 321 local state, provenance, and artifact files; the Volume held only project files |
+
+Not qualified: multiple GPUs, custom `MODAL_IMAGE` references, `--image`,
+`--devcontainer`, port forwarding, `--retry-for`, and `--environment`.

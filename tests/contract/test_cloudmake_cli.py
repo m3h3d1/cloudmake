@@ -1049,7 +1049,7 @@ def test_backends_reports_persistence_mode_for_every_backend(
     assert rows["host-ssh"][3:5] == ["externally-managed", "host-persistent"]
     assert rows["colab-ssh"][6] == "unsupported"
     assert rows["modal-sandbox"][1:7] == [
-        "unqualified", "yes", "provider-managed", "ephemeral", "no", "native",
+        "supported", "yes", "provider-managed", "ephemeral", "no", "native",
     ]
     for backend in (
         "local",

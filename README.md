@@ -485,7 +485,7 @@ Short names are for people; canonical names describe the transport unambiguously
 | `colab-ssh` | `colab-ssh` | Deprecated | SSH and rsync |
 | `ssh` | `host-ssh` | Supported | User-managed SSH and rsync |
 | `lightning` | `lightning-studio-ssh` | Unqualified | SSH and rsync |
-| `modal` | `modal-sandbox` | Unqualified | Modal Sandbox SDK file and exec APIs |
+| `modal` | `modal-sandbox` | Supported | Modal Sandbox SDK file and exec APIs |
 
 `colab` always means native notebook access. It never silently changes to SSH.
 
@@ -1601,10 +1601,9 @@ project target requests a machine.
 ### Modal Sandbox backend
 
 [Modal Sandboxes](https://modal.com/docs/guide/sandboxes) provide per-second
-CPU and GPU containers (T4 through B200). This adapter is currently
-**unqualified**: its offline provider simulations pass, but no live release
-gate has been retained. Cloudmake drives one named sandbox per project through
-the official Python SDK's file and exec APIs; there is no SSH or rsync. The
+CPU and GPU containers (T4 through B200). Cloudmake drives one named sandbox
+per project through the official Python SDK's file and exec APIs; there is no
+SSH or rsync. The
 source is fingerprinted and uploaded as an archive only when it changed, and
 project targets run with plain Make under `/cloudmake/src`.
 
@@ -1670,7 +1669,7 @@ The three service-adapter roles are visible in each backend's contract:
 | `colab-ssh` | Deprecated | Provider-managed | Ephemeral | No | Adapter | Unsupported | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
 | `host-ssh` | Supported | Externally managed | Host-persistent | No | Adapter | Host filesystem | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
 | `lightning-studio-ssh` | Unqualified | Provider-managed | Stop-persistent | No | Adapter | Studio filesystem | Docker, Podman, nerdctl, or CPU PRoot | Incremental rsync |
-| `modal-sandbox` | Unqualified | Provider-managed | Ephemeral; Volume with `--persist` | No | No | Modal Volume | Unsupported | Fingerprinted archive via the Modal SDK |
+| `modal-sandbox` | Supported | Provider-managed | Ephemeral; Volume with `--persist` | No | No | Modal Volume | Unsupported | Fingerprinted archive via the Modal SDK |
 
 Network direction is a separate backend property, not an implication of the
 transport:

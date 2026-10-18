@@ -2,8 +2,7 @@
 BACKEND_TRANSPORT := modal-sandbox
 BACKEND_ACCESS_CLASS := paid-tier
 BACKEND_API_VERSION := 1
-BACKEND_PRODUCT_STATUS := unqualified
-BACKEND_PRODUCT_STATUS_REASON := implemented against offline provider doubles; the live Modal release gate has not passed
+BACKEND_PRODUCT_STATUS := supported
 BACKEND_SESSION_REUSE := yes
 BACKEND_LIFECYCLE_CONTROL := provider-managed
 BACKEND_WORKSPACE_DURABILITY := ephemeral
