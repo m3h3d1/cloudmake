@@ -176,11 +176,6 @@ def test_reuse_refuses_a_changed_configuration(prototype: Path, tmp_path: Path) 
     assert len(calls(tmp_path, "create")) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="launcher passes CLOUDMAKE_ADOPT=1 whenever workspace_id != project key, "
-    "and every non-Colab backend derives a distinct workspace_id",
-)
 def test_foreign_owner_is_refused(prototype: Path, tmp_path: Path) -> None:
     project = consumer(tmp_path)
     env = environment(tmp_path)
@@ -193,7 +188,23 @@ def test_foreign_owner_is_refused(prototype: Path, tmp_path: Path) -> None:
     refused = cloudmake(prototype, project, env, "-b", "modal", "smoke", check=False)
 
     assert refused.returncode != 0
+    assert "refusing to replace modal-sandbox sandbox" in refused.stdout
     assert "remote-count=2" not in refused.stdout
+    assert (
+        json.loads(owner.read_text(encoding="utf-8"))["project_id"]
+        == record["project_id"]
+    )
+
+    (project / "notes.txt").write_text("adopted\n", encoding="utf-8")
+    adopted = cloudmake(
+        prototype, project, {**env, "CLOUDMAKE_ADOPT": "1"}, "-b", "modal", "smoke"
+    )
+    assert "Adopting modal-sandbox sandbox" in adopted.stdout
+    assert "remote-count=2" in adopted.stdout
+    assert (
+        json.loads(owner.read_text(encoding="utf-8"))["project_id"]
+        != record["project_id"]
+    )
 
 
 def test_unreadable_owner_is_ambiguous_not_fresh(prototype: Path, tmp_path: Path) -> None:

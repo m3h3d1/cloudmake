@@ -1438,6 +1438,28 @@ def test_workspace_attach_decouples_durable_identity_from_project_path(
     assert "workspace_id" not in old
 
 
+@pytest.mark.parametrize(
+    ("backend", "arguments"),
+    [
+        ("modal", ()),
+        ("kaggle", ()),
+        ("ssh", ("--host", "lab-gpu")),
+    ],
+)
+def test_ordinary_run_does_not_adopt_workspace(
+    tmp_path: Path, fake_bin: Path, backend: str, arguments: tuple[str, ...]
+) -> None:
+    project = make_project(tmp_path / "project")
+    environment, log = contract_environment(tmp_path, fake_bin)
+
+    invoke(project, environment, "-b", backend, *arguments, "build")
+
+    assert not any(
+        argument.startswith("CLOUDMAKE_ADOPT=")
+        for argument in engine_calls(log)[0]
+    )
+
+
 def test_workspace_purge_requires_force_and_detaches_local_metadata(
     tmp_path: Path, fake_bin: Path
 ) -> None:

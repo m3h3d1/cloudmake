@@ -2011,7 +2011,10 @@ def engine_command(
                 f"CLOUDMAKE_LOCK_FILE_OVERRIDE={state_home / 'resource-locks' / 'gcp-compute-ssh' / (resource_id + '.lock')}",
             ]
         )
-    if workspace_id != key:
+    if (
+        backend in {"colab-notebook", "kaggle-notebook"}
+        and workspace_id != default_workspace_id(key, backend)
+    ):
         variables.append("CLOUDMAKE_ADOPT=1")
     if accelerator_set:
         variables.append(
