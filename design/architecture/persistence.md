@@ -241,17 +241,20 @@ outputs.
 
 Cloudmake maintains a local, non-secret registry for workspaces known to this
 computer. It records the backend, requested accelerator and session, current
-project attachment, latest snapshot statistics, and the last observed VM CPU,
-memory, disk, OS, and accelerator properties. Metadata informs diagnostics and
-future launch compatibility; it is not a promise that an ephemeral provider
+project attachment, recorded durable owner identity, latest snapshot statistics,
+and the last observed VM CPU, memory, disk, OS, and accelerator properties.
+Metadata informs diagnostics and future launch compatibility; it is not a
+promise that an ephemeral provider
 will allocate the same machine again.
 
 The management surface remains option-only so it never reserves a project Make
 target: list known workspaces, show metadata, explicitly attach one to the
 current project, or explicitly purge one. Attaching transfers the local mapping
-from any previously attached project on the same computer. Purge requires the exact ID and a
-force acknowledgement, deletes both the encrypted Drive repository and its
-local Cloudmake-owned key, and detaches local project mappings.
+from any previously attached project on the same computer. A Colab attachment
+pins the previous owner until the newly attached project publishes a checkpoint;
+failed publication leaves that pin in place for a retry. Purge requires the
+exact ID and a force acknowledgement, deletes both the encrypted Drive
+repository and its local Cloudmake-owned key, and detaches local project mappings.
 
 ## Storage contract
 

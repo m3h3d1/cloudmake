@@ -12,16 +12,25 @@ from the canonical local path and host. Reusable remote workspaces carry the
 corresponding owner record. If another project attempts to use that workspace,
 cloudmake stops before replacing source or running `rsync --delete`.
 
-An intentional reassignment requires a conspicuous one-time override:
+For a locally known managed Colab checkpoint, use
+`cloudmake --workspace attach WORKSPACE_ID`, then run the project target normally.
+Until a checkpoint publishes successfully, any foreign live or restored owner
+must match the recorded previous owner. A failed publication leaves that check
+in place for a retry. An unexpected owner is refused.
+
+For remote owner-record adoption outside managed checkpoint attachment, use the
+conspicuous invocation-only override:
 
 ```sh
 # PROJECT_TARGET is supplied by the project's Makefile.
 CLOUDMAKE_ADOPT=1 cloudmake PROJECT_TARGET
 ```
 
-Do not use adoption merely to bypass an unexpected error. First inspect the old
-source path and host reported by cloudmake. Owner records contain provenance,
-not credentials, but are copied to the selected workspace or private notebook.
+Do not set `CLOUDMAKE_ADOPT=1` after a Colab `--workspace attach`: it bypasses
+the previous-owner check. Do not use adoption merely to bypass an unexpected error.
+First inspect the old source path and host reported by cloudmake. Owner records
+contain provenance, not credentials, but are copied to the selected workspace
+or private notebook.
 
 Local owner and state files are written atomically with private file
 permissions. Corrupt identity state is refused rather than silently replaced.
@@ -238,8 +247,10 @@ When an operation fails:
 2. Run `cloudmake -b <name> --doctor` to recheck local authentication and access.
 3. Run `cloudmake --sync-dry-run` to inspect the selected source and pending
    changes.
-4. If ownership differs, verify the reported project path and host before using
-   `CLOUDMAKE_ADOPT=1` in the host environment.
+4. If ownership differs, verify the reported project path and host. For a known
+   Colab checkpoint, use `--workspace attach` and retry without an override;
+   stop if its previous-owner check fails. Outside managed attachment, use
+   `CLOUDMAKE_ADOPT=1` only for a deliberate reassignment.
 5. If a remote lock is abandoned, wait for or deliberately adjust
    `REMOTE_LOCK_STALE`; do not delete an active holder's lock.
 6. Re-run a mutating target only after determining whether the provider already

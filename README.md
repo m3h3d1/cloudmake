@@ -321,9 +321,9 @@ can support:
 - SSH backends use `rsync` to transfer changed source. A manifest-derived
   deletion plan removes only stale synchronized paths, retaining unrelated
   project-generated workspace data.
-- A reusable Colab session compares the source fingerprint and skips the source
-  archive upload entirely when the selected tree is unchanged. When it changes,
-  Colab receives a complete validated source snapshot and reconciles it with
+- A reusable Colab session can skip the source archive upload when both the
+  selected tree and owner record are unchanged. When either changes, Colab
+  receives a complete validated source snapshot and reconciles it with
   manifest-classified generated workspace data because its native file API does
   not expose an rsync-like delta transport.
 - Kaggle starts a fresh batch VM for every submitted target, so remote
@@ -1699,9 +1699,9 @@ find the adapter interface and extension checklist in the
 [backend contract](docs/reference/backend-contract.md).
 
 The local backend is the no-transfer reference path. The Colab backend reuses a
-live session and skips source upload when the fingerprint is unchanged. Kaggle
-reuses its local compressed snapshot when unchanged and can restore a
-provider-side logical workspace, but still submits a fresh VM for every target,
+live session and can skip source upload when the fingerprint and owner record
+are unchanged. Kaggle reuses its local compressed snapshot when unchanged and
+can restore a provider-side logical workspace, but still submits a fresh VM for every target,
 represented once as `session-reuse=no`. Its scheduling, restore, and publication
 costs therefore remain non-amortized. All SSH backends share the same rsync and
 remote-Make transport.
@@ -1710,13 +1710,19 @@ remote-Make transport.
 
 Cloudmake protects reusable workspaces with ownership checks, serializes
 concurrent operations, validates remote prerequisites, and updates source and
-artifacts transactionally. Intentional reassignment of a remote workspace
-requires the conspicuous one-time override:
+artifacts transactionally. `--workspace attach ID` allows a locally known Colab
+checkpoint to be adopted from its recorded previous owner. That permission
+ends after successful checkpoint publication. Remote owner-record adoption
+outside managed checkpoint attachment uses the conspicuous invocation-only
+override:
 
 ```sh
 # PROJECT_TARGET is a target provided by the project's Makefile.
 CLOUDMAKE_ADOPT=1 cloudmake PROJECT_TARGET
 ```
+
+Do not set this override after a Colab `--workspace attach`: it bypasses the
+recorded previous-owner check.
 
 Use `.cloudmakeignore` for source that should never be transferred:
 

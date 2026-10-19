@@ -284,6 +284,12 @@ cloudmake --force --workspace purge WORKSPACE_ID
 ```
 
 These commands apply only to Cloudmake-managed checkpoint repositories.
+For Colab, attachment records the previous owner without contacting the
+provider.
+Run the next target normally: any foreign restored or live-session owner must
+match that recorded owner until a checkpoint publishes successfully. If
+publication fails, retry with the same attachment; do not add
+`CLOUDMAKE_ADOPT=1`, which bypasses the previous-owner check.
 
 ## What you can rely on
 

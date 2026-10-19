@@ -5,6 +5,9 @@ once a version is published as a GitHub release.
 
 ## Unreleased
 
+- Refuse SSH synchronization when remote ownership cannot be read; pin Colab
+  checkpoint attachment to its previous owner until successful publication;
+  and update Modal ownership even when source is unchanged.
 - Add the supported `modal-sandbox` backend (alias `modal`). It starts or
   reuses one named Modal Sandbox per project through the official Python SDK,
   uploads a fingerprinted source archive only when the source changed, runs

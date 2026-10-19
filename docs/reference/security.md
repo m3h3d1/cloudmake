@@ -349,9 +349,12 @@ workspace reuse before destructive synchronization. It contains no provider
 credential, but it reveals that local path and hostname to the selected remote
 workspace or private notebook.
 
-Intentional ownership changes require `CLOUDMAKE_ADOPT=1`. Verify the old owner
-before adoption; the control protects against mistakes, not against a malicious
-user who already controls the same cloud account and workspace.
+Attaching a locally known managed Colab checkpoint requires any foreign owner
+to match its recorded previous owner until successful publication. Remote
+owner-record adoption outside that attachment uses `CLOUDMAKE_ADOPT=1`; this
+override bypasses the attachment's previous-owner check. Verify the old owner
+before using it. These controls protect against mistakes, not against a
+malicious user who already controls the same cloud account and workspace.
 
 ## Archive and filesystem safety
 
