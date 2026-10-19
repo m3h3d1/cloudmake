@@ -118,6 +118,7 @@ _modal-sync-unlocked: ensure-owner
 				--retry-safe true --failure-code source_state_unavailable; \
 			echo '[modal] Remote source fingerprint could not be read.' >&2; exit 74 ;; \
 	esac; \
+	$(MODAL_CONTROL) upload '$(CLOUDMAKE_OWNER_FILE)' '$(REMOTE_OWNER_FILE)'; \
 	if test "$$remote" = "$$fingerprint"; then \
 		echo '[modal] Source unchanged; skipping archive upload.'; \
 	else \
@@ -130,7 +131,6 @@ _modal-sync-unlocked: ensure-owner
 			--warn-mb '$(SOURCE_WARN_MB)' --max-mb '$(SOURCE_MAX_MB)' >/dev/null; \
 		$(MODAL_CONTROL) upload '$(MODAL_SOURCE_ARCHIVE)' '$(REMOTE_SOURCE_ARCHIVE)'; \
 		$(MODAL_CONTROL) upload '$(MODAL_SOURCE_DELETE_SCRIPT)' '$(REMOTE_DELETE_SCRIPT)'; \
-		$(MODAL_CONTROL) upload '$(CLOUDMAKE_OWNER_FILE)' '$(REMOTE_OWNER_FILE)'; \
 		$(MODAL_CONTROL) exec "mkdir -p '$(REMOTE_SRC)' && sh '$(REMOTE_DELETE_SCRIPT)' '$(REMOTE_SRC)' && tar -xzf '$(REMOTE_SOURCE_ARCHIVE)' -C '$(REMOTE_SRC)' && rm -f '$(REMOTE_SOURCE_ARCHIVE)' '$(REMOTE_DELETE_SCRIPT)' && printf '%s' '$$fingerprint' > '$(REMOTE_FINGERPRINT)'"; \
 		echo '[modal] Synchronized source to $(REMOTE_SRC)'; \
 	fi

@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 
+import pytest
+
 from conftest import PROJECT_ROOT
 
 
@@ -404,7 +406,10 @@ def test_remote_owner_validation_rejects_another_project(tmp_path: Path) -> None
     else:
         raise AssertionError("cross-project checkpoint was accepted")
 
-    module.validate_owner(workspace, PROJECT_KEY, allow_attach=True)
+    with pytest.raises(module.CheckpointError, match="changed since attachment"):
+        module.validate_owner(workspace, PROJECT_KEY, allow_attach=True, adopt_from="e" * 24)
+
+    module.validate_owner(workspace, PROJECT_KEY, allow_attach=True, adopt_from="f" * 24)
 
 
 def test_remote_validation_never_follows_symlinked_control_records(tmp_path: Path) -> None:
@@ -447,6 +452,7 @@ def test_control_separates_project_and_persistent_workspace_identity(
                 "project_key": PROJECT_KEY,
                 "workspace_id": WORKSPACE_ID,
                 "allow_attach": True,
+                "adopt_from": "f" * 24,
                 "repository": (
                     "/content/drive/MyDrive/.cloudmake/checkpoints/"
                     f"{WORKSPACE_ID}/restic"
@@ -457,7 +463,9 @@ def test_control_separates_project_and_persistent_workspace_identity(
     )
     monkeypatch.setattr(module, "CONTROL", control)
 
-    assert module.load_control()["workspace_id"] == WORKSPACE_ID
+    loaded = module.load_control()
+    assert loaded["workspace_id"] == WORKSPACE_ID
+    assert loaded["adopt_from"] == "f" * 24
 
 
 def test_remote_tree_validation_has_no_cloudmake_size_ceiling(tmp_path: Path) -> None:

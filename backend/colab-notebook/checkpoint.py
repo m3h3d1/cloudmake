@@ -84,6 +84,11 @@ def load_control() -> dict[str, Any]:
         raise CheckpointError("invalid persistent workspace identity")
     if not isinstance(control.get("allow_attach"), bool):
         raise CheckpointError("invalid persistent workspace attachment policy")
+    adopt_from = control.get("adopt_from")
+    if adopt_from is not None and (
+        not isinstance(adopt_from, str) or PROJECT_KEY.fullmatch(adopt_from) is None
+    ):
+        raise CheckpointError("invalid previous workspace owner")
     expected = f"/content/drive/MyDrive/.cloudmake/checkpoints/{workspace_id}/restic"
     if repository != expected:
         raise CheckpointError("checkpoint repository is outside the managed Drive path")
@@ -139,7 +144,10 @@ def restic(
     )
 
 
-def validate_owner(workspace: Path, project_key: str, *, allow_attach: bool = False) -> None:
+def validate_owner(
+    workspace: Path, project_key: str, *, allow_attach: bool = False,
+    adopt_from: str | None = None,
+) -> None:
     owner_path = workspace / ".cloudmake-owner.json"
     try:
         if not stat.S_ISREG(owner_path.lstat().st_mode):
@@ -151,8 +159,11 @@ def validate_owner(workspace: Path, project_key: str, *, allow_attach: bool = Fa
         raise CheckpointError("restored checkpoint has no valid owner record") from error
     if owner.get("schema") != 1 or not isinstance(owner.get("project_id"), str):
         raise CheckpointError("restored checkpoint has no valid owner record")
-    if owner.get("project_id") != project_key and not allow_attach:
-        raise CheckpointError("checkpoint owner does not match the selected project")
+    if owner.get("project_id") != project_key:
+        if not allow_attach:
+            raise CheckpointError("checkpoint owner does not match the selected project")
+        if adopt_from and owner["project_id"] != adopt_from:
+            raise CheckpointError("checkpoint owner changed since attachment")
 
 
 def source_entries(root: Path) -> dict[str, Any]:
@@ -377,6 +388,7 @@ def restore(control: dict[str, Any]) -> dict[str, Any]:
         restored,
         control["project_key"],
         allow_attach=control["allow_attach"],
+        adopt_from=control.get("adopt_from"),
     )
     validate_tree(restored)
     shutil.rmtree(OLD_WORKSPACE, ignore_errors=True)

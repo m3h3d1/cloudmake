@@ -650,6 +650,18 @@ from pathlib import Path
 with Path(os.environ["FAKE_LOG"]).open("a", encoding="utf-8") as stream:
     stream.write(json.dumps(["ssh", *sys.argv[1:]]) + "\n")
 joined = " ".join(sys.argv[1:])
+if ".cloudmake-owner.json" in joined and "exit 3" in joined:
+    remote = Path(os.environ["FAKE_REMOTE"])
+    remote.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("FAKE_SSH_OWNER_TRANSPORT_ERROR"):
+        raise SystemExit(255)
+    if os.environ.get("FAKE_SSH_OWNER_READ_ERROR"):
+        raise SystemExit(74)
+    owner = remote / ".cloudmake-owner.json"
+    if owner.exists():
+        print(owner.read_text(encoding="utf-8"), end="")
+        raise SystemExit(0)
+    raise SystemExit(3)
 if "fake-codespace" in sys.argv[1:] and sys.argv[-1:] == ["true"]:
     remote = Path(os.environ["FAKE_REMOTE"])
     remote.mkdir(parents=True, exist_ok=True)
@@ -961,6 +973,54 @@ def test_launcher_runs_external_project_through_user_managed_host_ssh(
     assert "git clone" not in json.dumps(all_calls)
     assert not list((tmp_path / "state").rglob("ssh_config"))
     assert not (project / ".cloud-state").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "failure", ["FAKE_SSH_OWNER_READ_ERROR", "FAKE_SSH_OWNER_TRANSPORT_ERROR"]
+)
+def test_ssh_owner_probe_failure_stops_before_sync(
+    fake_bin: Path, tmp_path: Path, failure: str
+) -> None:
+    install_fake_ssh_tools(fake_bin)
+    project = external_project(tmp_path / "external-ssh-host")
+    env = launcher_environment(fake_bin, tmp_path)
+    env[failure] = "1"
+
+    result = run_command(
+        [LAUNCHER, "-b", "ssh", "--host", "lab-gpu", "build"],
+        cwd=project, env=env, check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Remote owner record could not be read" in result.stdout
+    events = calls(Path(env["FAKE_LOG"]))
+    assert not any(event[0] == "rsync" for event in events)
+    assert not any(event[0] == "ssh" and "/src'" in event[-1] for event in events)
+
+
+@pytest.mark.integration
+def test_ssh_foreign_owner_stops_before_sync(fake_bin: Path, tmp_path: Path) -> None:
+    install_fake_ssh_tools(fake_bin)
+    project = external_project(tmp_path / "external-ssh-host")
+    env = launcher_environment(fake_bin, tmp_path)
+    remote = Path(env["FAKE_REMOTE"])
+    remote.mkdir()
+    (remote / ".cloudmake-owner.json").write_text(
+        json.dumps({
+            "schema": 1, "project_id": "f" * 24,
+            "project_name": "other", "source_path": "/other", "hostname": "other-host",
+        }), encoding="utf-8",
+    )
+
+    result = run_command(
+        [LAUNCHER, "-b", "ssh", "--host", "lab-gpu", "build"],
+        cwd=project, env=env, check=False,
+    )
+
+    assert result.returncode != 0
+    assert "refusing to replace host-ssh workspace" in result.stdout
+    assert not calls(Path(env["FAKE_LOG"]), "rsync")
 
 
 @pytest.mark.integration
@@ -1699,6 +1759,74 @@ def test_colab_checkpoint_uses_one_run_and_records_operation_provenance(
     assert metadata["logical_bytes"] == 8192
     assert metadata["last_runtime"]["cpu_count"] == 4
     assert len(list(latest.parent.glob("*.json"))) == 2  # run plus latest alias
+
+
+@pytest.mark.integration
+def test_colab_attachment_is_pinned_until_successful_publish(
+    fake_bin: Path, tmp_path: Path
+) -> None:
+    install_fake_colab(fake_bin)
+    checkpoint_host = install_fake_checkpoint_host(fake_bin)
+    first = external_project(tmp_path / "first")
+    second = external_project(tmp_path / "second")
+    env = launcher_environment(fake_bin, tmp_path)
+    env["COLAB_CHECKPOINT_HOST"] = str(checkpoint_host)
+
+    run_command([LAUNCHER, "--use", "colab", "--persist"], cwd=first, env=env)
+    run_command([LAUNCHER, "build"], cwd=first, env=env)
+    workspace_path = next((tmp_path / "state" / "workspaces").glob("*.json"))
+    workspace = json.loads(workspace_path.read_text())
+    previous_id = workspace["project_id"]
+    owner_path = tmp_path / "remote" / ".cloudmake-owner.json"
+    assert json.loads(owner_path.read_text())["project_id"] == previous_id
+    uploads_before_attach = sum(
+        event[0] == "colab" and event[1] == "upload" and "source.tar.gz" in event[-1]
+        for event in calls(Path(env["FAKE_LOG"]))
+    )
+
+    run_command(
+        [LAUNCHER, "--workspace", "attach", workspace["workspace_id"]],
+        cwd=second,
+        env=env,
+    )
+    config_path = next(
+        path for path in (tmp_path / "config" / "projects").glob("*.json")
+        if json.loads(path.read_text()).get("project") == str(second)
+    )
+    pending = {"workspace_id": workspace["workspace_id"], "previous_project_id": previous_id}
+    assert json.loads(config_path.read_text())["workspace_adoption"] == pending
+
+    previous_owner = json.loads(owner_path.read_text())
+    changed_owner = {**previous_owner, "project_id": "f" * 24}
+    owner_path.write_text(json.dumps(changed_owner), encoding="utf-8")
+    refused = run_command([LAUNCHER, "build"], cwd=second, env=env, check=False)
+    assert refused.returncode != 0
+    assert "owner changed since attachment" in refused.stdout
+    owner_path.write_text(json.dumps(previous_owner), encoding="utf-8")
+
+    env["FAKE_CHECKPOINT_PUBLISH_FAIL"] = "publication failed"
+    failed = run_command([LAUNCHER, "build"], cwd=second, env=env, check=False)
+    assert failed.returncode != 0
+    assert json.loads(config_path.read_text())["workspace_adoption"] == pending
+    assert json.loads(workspace_path.read_text())["project_id"] == previous_id
+    new_id = json.loads(owner_path.read_text())["project_id"]
+    assert new_id != previous_id
+    assert sum(
+        event[0] == "colab" and event[1] == "upload" and "source.tar.gz" in event[-1]
+        for event in calls(Path(env["FAKE_LOG"]))
+    ) > uploads_before_attach
+
+    env.pop("FAKE_CHECKPOINT_PUBLISH_FAIL")
+    run_command([LAUNCHER, "build"], cwd=second, env=env)
+    assert "workspace_adoption" not in json.loads(config_path.read_text())
+    assert json.loads(workspace_path.read_text())["project_id"] == new_id
+
+    owner = json.loads(owner_path.read_text())
+    owner["project_id"] = "f" * 24
+    owner_path.write_text(json.dumps(owner), encoding="utf-8")
+    refused = run_command([LAUNCHER, "build"], cwd=second, env=env, check=False)
+    assert refused.returncode != 0
+    assert "refusing to replace" in refused.stdout
 
 
 @pytest.mark.integration

@@ -141,16 +141,18 @@ _ssh-sync-unlocked: ensure-owner $(BACKEND_PREREQUISITE)
 		--script '$(SSH_SOURCE_DELETE_SCRIPT)'
 	@set -eu; \
 	temporary='$(SSH_REMOTE_OWNER_COPY).tmp'; \
-	if $(SSH) "cat '$(REMOTE_OWNER_FILE)'" > "$$temporary" 2>/dev/null && test -s "$$temporary"; then \
-		mv "$$temporary" '$(SSH_REMOTE_OWNER_COPY)'; \
-		adopt=''; test '$(CLOUDMAKE_ADOPT)' = 1 && adopt='--adopt' || :; \
-		$(PYTHON_BIN) '$(CLOUDMAKE_TOOL_ROOT)/core/project_identity.py' check \
-			--expected '$(CLOUDMAKE_OWNER_FILE)' \
-			--actual '$(SSH_REMOTE_OWNER_COPY)' \
-			--resource '$(BACKEND) workspace $(REMOTE_ROOT)' $$adopt; \
-	else \
-		rm -f "$$temporary" '$(SSH_REMOTE_OWNER_COPY)'; \
-	fi
+	set +e; $(SSH) "if test -e '$(REMOTE_OWNER_FILE)' || test -L '$(REMOTE_OWNER_FILE)'; then cat '$(REMOTE_OWNER_FILE)' || exit 74; elif test -r '$(REMOTE_ROOT)' && test -x '$(REMOTE_ROOT)'; then exit 3; else exit 74; fi" > "$$temporary"; code=$$?; set -e; \
+	case $$code in \
+		0) test -s "$$temporary" || { echo '[ssh] Remote owner record is empty; refusing to sync.' >&2; exit 74; }; \
+			mv "$$temporary" '$(SSH_REMOTE_OWNER_COPY)'; \
+			adopt=''; test '$(CLOUDMAKE_ADOPT)' = 1 && adopt='--adopt' || :; \
+			$(PYTHON_BIN) '$(CLOUDMAKE_TOOL_ROOT)/core/project_identity.py' check \
+				--expected '$(CLOUDMAKE_OWNER_FILE)' \
+				--actual '$(SSH_REMOTE_OWNER_COPY)' \
+				--resource '$(BACKEND) workspace $(REMOTE_ROOT)' $$adopt ;; \
+		3) rm -f "$$temporary" '$(SSH_REMOTE_OWNER_COPY)' ;; \
+		*) rm -f "$$temporary"; echo '[ssh] Remote owner record could not be read; refusing to sync.' >&2; exit 74 ;; \
+	esac
 	$(SSH) 'mkdir -p $(REMOTE_SRC)'
 	$(SSH) "sh -s -- '$(REMOTE_SRC)'" < '$(SSH_SOURCE_DELETE_SCRIPT)'
 	$(RSYNC_BIN) -az \

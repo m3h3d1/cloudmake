@@ -1128,6 +1128,45 @@ def load_workspace_record(state_home: Path, workspace_id: str) -> dict[str, Any]
     return record
 
 
+def attached_adoption(
+    config_home: Path, project_id: str, backend: str, workspace_id: str
+) -> str | None:
+    if backend != "colab-notebook":
+        return None
+    saved = load_json(config_home / "projects" / f"{project_id}.json")
+    pending = saved.get("workspace_adoption")
+    if pending is None:
+        return None
+    if (
+        not isinstance(pending, dict)
+        or not isinstance(pending.get("workspace_id"), str)
+        or WORKSPACE_ID.fullmatch(pending["workspace_id"]) is None
+        or not isinstance(pending.get("previous_project_id"), str)
+        or WORKSPACE_ID.fullmatch(pending["previous_project_id"]) is None
+    ):
+        raise UsageError("configured workspace attachment is invalid")
+    return pending["previous_project_id"] if pending["workspace_id"] == workspace_id else None
+
+
+def clear_published_adoption(
+    config_home: Path, project_id: str, workspace_id: str,
+    previous_project_id: str | None, receipts: list[dict[str, Any]],
+) -> None:
+    if previous_project_id is None or not any(
+        receipt.get("operation") == "publish" and receipt.get("status") == "succeeded"
+        for receipt in receipts
+    ):
+        return
+    path = config_home / "projects" / f"{project_id}.json"
+    saved = load_json(path)
+    if saved.get("workspace_adoption") == {
+        "workspace_id": workspace_id,
+        "previous_project_id": previous_project_id,
+    }:
+        saved.pop("workspace_adoption")
+        atomic_json(path, saved)
+
+
 def update_workspace_record(
     *,
     state_home: Path,
@@ -1137,6 +1176,7 @@ def update_workspace_record(
     accelerator: str | None,
     session: str | None = None,
     receipts: list[dict[str, Any]] | None = None,
+    update_owner: bool = False,
 ) -> dict[str, Any]:
     path = workspace_record_path(state_home, workspace_id)
     record = load_json(path)
@@ -1147,6 +1187,16 @@ def update_workspace_record(
             "workspace_id": workspace_id,
             "created_at": now,
         }
+    if "project_id" not in record:
+        previous = record.get("last_attached_project")
+        record["project_id"] = project_key(
+            Path(previous) if isinstance(previous, str) else project
+        )
+    if update_owner and any(
+        receipt.get("operation") == "publish" and receipt.get("status") == "succeeded"
+        for receipt in receipts or []
+    ):
+        record["project_id"] = project_key(project)
     record.update(
         backend=backend,
         accelerator=accelerator or "cpu",
@@ -1238,6 +1288,9 @@ def detach_workspace_mappings(
             saved.pop("workspace_id", None)
             saved.pop("checkpoint", None)
             saved["persistent_workspace"] = False
+        pending = saved.get("workspace_adoption")
+        if isinstance(pending, dict) and pending.get("workspace_id") == workspace_id:
+            saved.pop("workspace_adoption", None)
         atomic_json(path, saved)
 
 
@@ -1290,6 +1343,16 @@ def manage_workspace(
         if options["force"]:
             raise UsageError("--force is not used with --workspace attach")
         config_path = config_home / "projects" / f"{project_id}.json"
+        previous_project_id = None
+        if record_backend == "colab-notebook":
+            previous_project_id = record.get("project_id")
+            if previous_project_id is None and isinstance(record.get("last_attached_project"), str):
+                previous_project_id = project_key(Path(record["last_attached_project"]))
+            if (
+                not isinstance(previous_project_id, str)
+                or WORKSPACE_ID.fullmatch(previous_project_id) is None
+            ):
+                raise UsageError("persistent workspace has no known previous owner")
         detach_workspace_mappings(config_home, selected, keep=config_path)
         saved = project_config
         saved.update(
@@ -1300,6 +1363,13 @@ def manage_workspace(
             project=os.fspath(project),
         )
         remember_workspace_id(saved, record_backend, selected)
+        if record_backend == "colab-notebook" and previous_project_id != project_id:
+            saved["workspace_adoption"] = {
+                "workspace_id": selected,
+                "previous_project_id": previous_project_id,
+            }
+        else:
+            saved.pop("workspace_adoption", None)
         saved_accelerator = record.get("accelerator")
         if isinstance(saved_accelerator, str):
             saved["accelerator"] = "" if saved_accelerator == "cpu" else saved_accelerator
@@ -1909,6 +1979,7 @@ def engine_command(
     target: str,
     assignments: list[str],
     retry_seconds: int | None,
+    adopt_from: str | None = None,
     codespace: str | None = None,
     gcp_resource: dict[str, str] | None = None,
     allocation_result: Path | None = None,
@@ -2011,11 +2082,9 @@ def engine_command(
                 f"CLOUDMAKE_LOCK_FILE_OVERRIDE={state_home / 'resource-locks' / 'gcp-compute-ssh' / (resource_id + '.lock')}",
             ]
         )
-    if (
-        backend in {"colab-notebook", "kaggle-notebook"}
-        and workspace_id != default_workspace_id(key, backend)
-    ):
+    if adopt_from is not None:
         variables.append("CLOUDMAKE_ADOPT=1")
+        variables.append(f"CLOUDMAKE_ADOPT_FROM={adopt_from}")
     if accelerator_set:
         variables.append(
             f"CLOUDMAKE_CONTEXT_ACCELERATOR={accelerator or 'cpu'}"
@@ -2577,6 +2646,10 @@ def run(arguments: list[str]) -> int:
         checkpoint,
         workspace_id,
     ) = resolve_preferences(project, options, config_home, key)
+    pending_adoption = attached_adoption(config_home, key, backend, workspace_id)
+    adopt_from = (
+        pending_adoption if os.environ.get("CLOUDMAKE_ADOPT") != "1" else None
+    )
     replay_capability = backend_target_replay(backend)
     workstation_option = (
         options["image"] is not None
@@ -2804,6 +2877,7 @@ def run(arguments: list[str]) -> int:
             cache_home=cache_home,
             key=key,
             workspace_id=workspace_id,
+            adopt_from=adopt_from,
             target=engine_target,
             assignments=assignments,
             retry_seconds=retry_seconds,
@@ -2838,6 +2912,7 @@ def run(arguments: list[str]) -> int:
         ):
             exit_code = 75
         if managed_checkpoint:
+            receipts = checkpoint_receipts(state_root, "operation")
             update_workspace_record(
                 state_home=state_home,
                 workspace_id=workspace_id,
@@ -2845,7 +2920,7 @@ def run(arguments: list[str]) -> int:
                 backend=backend,
                 accelerator=accelerator,
                 session=colab_session,
-                receipts=checkpoint_receipts(state_root, "operation"),
+                receipts=receipts,
             )
         if (
             exit_code == 0
@@ -3047,6 +3122,7 @@ def run(arguments: list[str]) -> int:
                 cache_home=cache_home,
                 key=key,
                 workspace_id=workspace_id,
+                adopt_from=adopt_from,
                 target=engine_target,
                 assignments=assignments,
                 retry_seconds=retry_seconds,
@@ -3075,6 +3151,20 @@ def run(arguments: list[str]) -> int:
         if managed_checkpoint:
             record["checkpoint"]["operations"] = checkpoint_receipts(
                 state_root, run_id
+            )
+            update_workspace_record(
+                state_home=state_home,
+                workspace_id=workspace_id,
+                project=project,
+                backend=backend,
+                accelerator=accelerator,
+                session=colab_session,
+                receipts=record["checkpoint"]["operations"],
+                update_owner=True,
+            )
+            clear_published_adoption(
+                config_home, key, workspace_id, pending_adoption,
+                record["checkpoint"]["operations"],
             )
         lifecycle = load_json(operation_state) if operation_state.is_file() else {}
         submission = lifecycle.get("target_submission", "ambiguous")
@@ -3125,6 +3215,11 @@ def run(arguments: list[str]) -> int:
             accelerator=accelerator,
             session=colab_session,
             receipts=record["checkpoint"]["operations"],
+            update_owner=True,
+        )
+        clear_published_adoption(
+            config_home, key, workspace_id, pending_adoption,
+            record["checkpoint"]["operations"],
         )
     lifecycle = load_json(operation_state) if operation_state.is_file() else {}
     if (

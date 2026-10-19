@@ -172,7 +172,8 @@ _colab-checkpoint-restore: | $(COLAB_STATE_DIR)
 		--client '$(COLAB_BIN)' --session '$(COLAB_SESSION)' \
 		--project-key '$(CLOUDMAKE_PROJECT_KEY)' \
 		--workspace-id '$(CLOUDMAKE_WORKSPACE_ID)' --resource-state "$$resource_state" \
-		$(if $(filter-out $(CLOUDMAKE_PROJECT_KEY),$(CLOUDMAKE_WORKSPACE_ID)),--allow-attach) \
+		$(if $(filter 1,$(CLOUDMAKE_ADOPT)),--allow-attach) \
+		$(if $(CLOUDMAKE_ADOPT_FROM),--adopt-from '$(CLOUDMAKE_ADOPT_FROM)') \
 		--tool-root '$(CLOUDMAKE_TOOL_ROOT)' \
 		--state-dir '$(COLAB_CHECKPOINT_STATE_DIR)' \
 		--result '$(COLAB_CHECKPOINT_RESTORE_RESULT)'
@@ -248,7 +249,8 @@ _colab-sync: _colab-start-ready | $(COLAB_STATE_DIR)
 		if ! $(PYTHON_BIN) '$(CLOUDMAKE_TOOL_ROOT)/core/project_identity.py' check \
 			--expected '$(CLOUDMAKE_OWNER_FILE)' \
 			--actual '$(COLAB_REMOTE_OWNER_COPY)' \
-			--resource 'Colab session $(COLAB_SESSION)' $$adopt; then \
+			--resource 'Colab session $(COLAB_SESSION)' $$adopt \
+			$(if $(CLOUDMAKE_ADOPT_FROM),--adopt-from '$(CLOUDMAKE_ADOPT_FROM)'); then \
 			$(CLOUDMAKE_RECORD_STATE) --phase ownership --provider-state ready \
 				--runtime-state foreign --target-submission not_submitted \
 				--retry-safe true --failure-code foreign_workspace; exit 73; \
@@ -296,7 +298,8 @@ _colab-sync: _colab-start-ready | $(COLAB_STATE_DIR)
 		remote_fingerprint=1; \
 	fi; \
 	if test "$$remote_fingerprint" = 1 && \
-		cmp -s '$(COLAB_FINGERPRINT)' '$(COLAB_REMOTE_FINGERPRINT_COPY)'; then \
+		cmp -s '$(COLAB_FINGERPRINT)' '$(COLAB_REMOTE_FINGERPRINT_COPY)' && \
+		cmp -s '$(CLOUDMAKE_OWNER_FILE)' '$(COLAB_REMOTE_OWNER_COPY)'; then \
 		echo '[colab] Source unchanged; skipping archive upload.'; \
 		mv '$(CLOUDMAKE_CURRENT_MANIFEST)' '$(CLOUDMAKE_MANIFEST)'; \
 	else \

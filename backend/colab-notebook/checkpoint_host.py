@@ -113,6 +113,7 @@ class ColabCheckpoint:
         self.project_key = arguments.project_key
         self.workspace_id = arguments.workspace_id or arguments.project_key
         self.allow_attach = arguments.allow_attach
+        self.adopt_from = arguments.adopt_from
         self.tool_root = arguments.tool_root.resolve()
         self.state_dir = arguments.state_dir.resolve()
         self.receipt_path = arguments.result.resolve()
@@ -223,6 +224,7 @@ class ColabCheckpoint:
                 "project_key": self.project_key,
                 "workspace_id": self.workspace_id,
                 "allow_attach": self.allow_attach,
+                "adopt_from": self.adopt_from,
                 "repository": self.repository,
             },
         )
@@ -464,6 +466,7 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--project-key", required=True)
     root.add_argument("--workspace-id")
     root.add_argument("--allow-attach", action="store_true")
+    root.add_argument("--adopt-from")
     root.add_argument("--resource-state", choices=("started", "reused"), required=True)
     root.add_argument("--tool-root", type=Path, required=True)
     root.add_argument("--state-dir", type=Path, required=True)

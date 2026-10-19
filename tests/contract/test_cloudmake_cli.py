@@ -1409,8 +1409,9 @@ def test_persist_alias_registers_and_lists_a_persistent_workspace(
     assert engine_calls(log) == []
 
 
+@pytest.mark.parametrize("legacy_record", [False, True])
 def test_workspace_attach_decouples_durable_identity_from_project_path(
-    tmp_path: Path, fake_bin: Path
+    tmp_path: Path, fake_bin: Path, legacy_record: bool
 ) -> None:
     first = make_project(tmp_path / "first")
     second = make_project(tmp_path / "second")
@@ -1419,6 +1420,10 @@ def test_workspace_attach_decouples_durable_identity_from_project_path(
     record = next((tmp_path / "state" / "workspaces").glob("*.json"))
     metadata = json.loads(record.read_text(encoding="utf-8"))
     workspace_id = metadata["workspace_id"]
+    previous_project_id = metadata["project_id"]
+    if legacy_record:
+        metadata.pop("project_id")
+        record.write_text(json.dumps(metadata), encoding="utf-8")
     invoke(second, environment, "--use", "local")
 
     attached = invoke(second, environment, "--workspace", "attach", workspace_id)
@@ -1428,6 +1433,7 @@ def test_workspace_attach_decouples_durable_identity_from_project_path(
     call = engine_calls(log)[0]
     assert_assignment(call, "CLOUDMAKE_WORKSPACE_ID", workspace_id)
     assert_assignment(call, "CLOUDMAKE_ADOPT", "1")
+    assert_assignment(call, "CLOUDMAKE_ADOPT_FROM", previous_project_id)
     assert_assignment(call, "COLAB_GPU", "T4")
     configs = [
         json.loads(path.read_text(encoding="utf-8"))

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -89,6 +90,8 @@ def ensure(arguments: argparse.Namespace) -> int:
 
 def check(arguments: argparse.Namespace) -> int:
     expected = load(arguments.expected)
+    if arguments.adopt_from and re.fullmatch(r"[0-9a-f]{24}", arguments.adopt_from) is None:
+        raise IdentityError("invalid previous workspace owner")
     try:
         actual = load(arguments.actual)
     except FileNotFoundError:
@@ -96,6 +99,8 @@ def check(arguments: argparse.Namespace) -> int:
 
     if actual["project_id"] == expected["project_id"]:
         return 0
+    if arguments.adopt_from and actual["project_id"] != arguments.adopt_from:
+        raise IdentityError("workspace owner changed since attachment; refusing to adopt")
     if arguments.adopt:
         print(
             f"[cloudmake] Adopting {arguments.resource}; previous owner was "
@@ -127,6 +132,7 @@ def parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--actual", type=Path, required=True)
     check_parser.add_argument("--resource", required=True)
     check_parser.add_argument("--adopt", action="store_true")
+    check_parser.add_argument("--adopt-from")
     check_parser.set_defaults(run=check)
     return root
 

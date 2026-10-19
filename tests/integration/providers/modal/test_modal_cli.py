@@ -195,7 +195,6 @@ def test_foreign_owner_is_refused(prototype: Path, tmp_path: Path) -> None:
         == record["project_id"]
     )
 
-    (project / "notes.txt").write_text("adopted\n", encoding="utf-8")
     adopted = cloudmake(
         prototype, project, {**env, "CLOUDMAKE_ADOPT": "1"}, "-b", "modal", "smoke"
     )
@@ -205,6 +204,8 @@ def test_foreign_owner_is_refused(prototype: Path, tmp_path: Path) -> None:
         json.loads(owner.read_text(encoding="utf-8"))["project_id"]
         != record["project_id"]
     )
+    normal = cloudmake(prototype, project, env, "-b", "modal", "smoke")
+    assert "remote-count=3" in normal.stdout
 
 
 def test_unreadable_owner_is_ambiguous_not_fresh(prototype: Path, tmp_path: Path) -> None:
