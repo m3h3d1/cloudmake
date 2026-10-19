@@ -1037,62 +1037,20 @@ local source is reconciled; a reused VM keeps its existing workspace. Failed or
 ambiguous project targets do not publish a new snapshot. `--no-persist` turns
 the feature off for subsequent invocations without deleting existing snapshots.
 
-The persistence boundary matters for tool provisioning. On Colab, Cloudmake
-checkpoints only `/content/.cloud-build/workspace`; it does not capture `/usr`,
-`/usr/local`, `/opt`, a home directory outside that workspace, Docker's system
-layer store, drivers, services, or other VM state. A project-provided target
-called `bootstrap` or `provision` has no special persistence semantics. If it
-performs an ordinary system-wide installation, that installation disappears
-with the VM.
+Only `/content/.cloud-build/workspace` is checkpointed. Project-relative build
+output survives, but system-wide installs and running processes do not. A
+project that needs a toolchain on a replacement VM must save its reusable
+payload inside that workspace; Cloudmake does not reinterpret its Make targets
+or installation recipes. See [Persistence architecture](design/architecture/persistence.md)
+for the full workspace and filesystem rules.
 
-For an expensive toolchain to survive VM replacement, the project's target must
-put its durable representation inside the managed workspace—for example a
-relocatable prefix, opaque tool/rootfs archive, or package/build cache. A fresh
-VM may then activate or load that payload and recreate ephemeral
-integration such as `PATH` settings. The running installation may be
-materialized elsewhere; the reusable payload must be inside the checkpoint
-boundary. Uploaded source links remain confined to the project. Links created
-by the remote project are checkpointed without being followed, including links
-used by package stores and extracted root filesystems. Special files
-remain rejected, and collection cannot follow an escaping link. Cloudmake
-deliberately does not rewrite installation commands or prescribe how a project
-provisions its tools.
-
-An existing project therefore runs through Cloudmake unmodified, and any state
-it already keeps in its project tree becomes durable automatically. Persistence
-cannot magically preserve an existing recipe that writes only to system
-directories. Such a project must add or wrap a project-owned provisioning
-recipe that emits a reusable payload to a relative path inside its tree. This
-is a condition for cross-VM persistence, not a new mandatory Cloudmake target.
-
-The active workspace stays on the VM's local disk. Cloudmake asks the official
-`colab drivemount` flow to mount Drive only while restoring or publishing, then
-verifies that Drive and the transient key material are gone before project Make
-runs. A fresh VM can require a foreground browser authorization; Cloudmake does
-not copy or automate the user's Google credentials. Mount readiness and
-idempotent key-destruction/unmount cleanup use bounded same-session retries;
-Cloudmake never recreates the VM or replays a project target to recover them.
-
-Checkpointing has fixed provider overhead in addition to transferring changed
-data: allocating the runtime, authorizing and mounting Drive on a fresh VM,
-installing the checkpoint helper, executing notebooks, and verifying the
-repository. It is intended for provisioning or build state whose reconstruction
-cost is materially larger than that overhead. For small workloads, leave
-persistence disabled.
-
-Cloudmake generates the repository key itself and stores it only in the local
-OS credential store. The VM generates an ephemeral transport key; the host
-uploads only RSA-OAEP ciphertext, and the VM decrypts it directly into restic's
-password pipe. The plaintext key is never placed in arguments, environment
-variables, notebooks, files, logs, provenance, project configuration, or source
-control. If secure storage, transport cleanup, or Drive unmount verification
-fails, the target is blocked as an infrastructure failure.
-
-Persistent-workspace history is recovery state for Cloudmake, not archival backup. Losing the
-local credential-store item makes existing snapshots unreadable, although the
-local source remains unaffected. The complete lifecycle and custody boundaries
-are documented in [Persistence architecture](design/architecture/persistence.md) and the
-[Security model](docs/reference/security.md).
+The active workspace stays on the VM's local disk. Drive is mounted only for
+restore and publication, and a fresh VM may require browser authorization.
+Checkpointing adds fixed provider overhead, so leave it off when rebuilding is
+cheaper. The repository key is kept in the local OS credential store;
+losing it makes existing snapshots unreadable, though local source is unaffected.
+See the [Security model](docs/reference/security.md) for key custody and
+failure behavior. Checkpoints are recovery state, not archival backups.
 
 The 2.0 live acceptance gate has restored a 3.3 GB ORFS workspace into a
 replacement Colab VM, reused a previously completed floorplan without

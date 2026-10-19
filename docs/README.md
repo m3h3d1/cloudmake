@@ -6,7 +6,7 @@ and backend integrations may rely on.
 
 ## Tutorials
 
-Cloudmake's major capabilities form a four-day learning path. Each tutorial
+Cloudmake's major capabilities form a three-day learning path. Each tutorial
 stands alone, while the sequence adds one concern at a time.
 
 | Day | Release step | Major subject | Central question |
@@ -14,17 +14,13 @@ stands alone, while the sequence adds one concern at a time.
 | [Day 1](tutorials/day1-stateless.md) | Cloudmake 1.x | Stateless remote Make | How can an unchanged local Make project run on remote hardware? |
 | [Day 2](tutorials/day2-workspace.md) | Cloudmake 2.0 | Managed checkpoints | How can useful build artifacts survive disposable compute without becoming project authority? |
 | [Day 3](tutorials/day3-devcon.md) | Cloudmake 2.1–2.4 | Dev Container workstations | How can one workstation contract run across unequal backends with the least host privilege? |
-| `day4-security.md` (planned) | Cloudmake 3.x | Security model | How can remote execution preserve identity, credential custody, trust, and least authority? |
 
-Day 4 will be added with the 3.x security model. Until then,
-[`reference/security.md`](reference/security.md) defines the released security
-boundary without presenting the future tutorial as current functionality.
+The [security reference](reference/security.md) applies across all three days.
 
 ```text
 remote Make
   -> retain useful build state
   -> supply a portable development workstation
-  -> secure identities, credentials, and trust boundaries
 ```
 
 ## Reference
