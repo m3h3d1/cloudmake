@@ -49,7 +49,7 @@ def running(app: str, name: str):
 
 
 def requested_config(arguments: argparse.Namespace) -> dict[str, object]:
-    return {
+    config = {
         "gpu": arguments.gpu or None,
         "cpu": arguments.cpu,
         "memory": arguments.memory,
@@ -59,12 +59,23 @@ def requested_config(arguments: argparse.Namespace) -> dict[str, object]:
         "volume": arguments.volume if arguments.persist == "1" else None,
         "remote_root": arguments.remote_root,
     }
+    if arguments.apt.split():
+        config["apt"] = arguments.apt.split()
+    if arguments.pip.split():
+        config["pip"] = arguments.pip.split()
+    return config
 
 
-def image_for(reference: str):
-    if reference:
-        return modal.Image.from_registry(reference)
-    return modal.Image.debian_slim().apt_install(*DEFAULT_PACKAGES)
+def image_for(arguments: argparse.Namespace):
+    if arguments.image:
+        image = modal.Image.from_registry(arguments.image)
+    else:
+        image = modal.Image.debian_slim().apt_install(*DEFAULT_PACKAGES)
+    if arguments.apt.split():
+        image = image.apt_install(*arguments.apt.split())
+    if arguments.pip.split():
+        image = image.pip_install(*arguments.pip.split())
+    return image
 
 
 def run(sandbox, command: str, *, stream: bool) -> int:
@@ -117,7 +128,7 @@ def start(arguments: argparse.Namespace) -> int:
             sandbox = modal.Sandbox.create(
                 app=app,
                 name=arguments.name,
-                image=image_for(arguments.image),
+                image=image_for(arguments),
                 gpu=arguments.gpu or None,
                 cpu=arguments.cpu,
                 memory=arguments.memory,
@@ -228,6 +239,8 @@ def parser() -> argparse.ArgumentParser:
     begin.add_argument("--timeout", type=int, required=True)
     begin.add_argument("--idle-timeout", type=int, required=True)
     begin.add_argument("--image", default="")
+    begin.add_argument("--apt", default="")
+    begin.add_argument("--pip", default="")
     begin.add_argument("--web-port", type=int, default=0)
     begin.add_argument("--persist", choices=("0", "1"), default="0")
     begin.add_argument("--volume", required=True)

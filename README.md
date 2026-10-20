@@ -1605,6 +1605,12 @@ The default image is Debian slim with Python, Make, and curl. Set
 when the project needs another toolchain; it must provide `sh`, `make`, and
 `tar`. This is a backend setting, not the `--image` OCI runner.
 
+`MODAL_APT` and `MODAL_PIP` add space-separated Debian and pip packages to the
+image, for example `MODAL_APT=git MODAL_PIP='torch==2.8.0'`. Modal builds the
+image once and caches it, so large dependencies such as PyTorch load quickly
+instead of being installed into the workspace on each start. Changing either
+setting requires `--stop`.
+
 `--persist` mounts the Modal Volume `cloudmake-<sandbox>` at `/cloudmake`, so
 project-generated state such as downloaded models or build trees survives
 `--stop` and the 24-hour limit. Remove it explicitly with

@@ -293,6 +293,26 @@ def test_open_requires_a_configured_port(prototype: Path, tmp_path: Path) -> Non
     assert calls(tmp_path, "create") == []
 
 
+def test_extra_packages_extend_the_default_image(prototype: Path, tmp_path: Path) -> None:
+    project = consumer(tmp_path)
+    env = environment(tmp_path, MODAL_APT="git", MODAL_PIP="torch==2.8.0 numpy<2")
+
+    cloudmake(prototype, project, env, "-b", "modal", "smoke")
+    changed = cloudmake(
+        prototype, project, {**env, "MODAL_PIP": "torch==2.9.0"}, "-b", "modal", "smoke", check=False
+    )
+    bad = cloudmake(prototype, project, {**env, "MODAL_PIP": "torch;rm"}, "-b", "modal", "smoke", check=False)
+
+    assert calls(tmp_path, "create")[0]["image"] == (
+        "debian_slim+apt:make,curl,ca-certificates,xz-utils+apt:git+pip:torch==2.8.0,numpy<2"
+    )
+    assert changed.returncode != 0
+    assert "different configuration" in changed.stdout
+    assert bad.returncode != 0
+    assert "MODAL_PIP contains unsupported characters" in bad.stdout
+    assert len(calls(tmp_path, "create")) == 1
+
+
 def test_reuse_refuses_a_changed_web_port(prototype: Path, tmp_path: Path) -> None:
     project = consumer(tmp_path)
     env = environment(tmp_path, MODAL_WEB_PORT="8188")

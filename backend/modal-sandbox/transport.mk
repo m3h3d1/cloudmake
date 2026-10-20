@@ -75,6 +75,7 @@ _modal-start: ensure-owner
 	@$(MODAL_CONTROL) start --gpu '$(MODAL_GPU)' --cpu '$(MODAL_CPU)' \
 		--memory '$(MODAL_MEMORY)' --timeout '$(MODAL_TIMEOUT)' \
 		--idle-timeout '$(MODAL_IDLE_TIMEOUT)' --image '$(MODAL_IMAGE)' \
+		--apt '$(MODAL_APT)' --pip '$(MODAL_PIP)' \
 		$(if $(strip $(MODAL_WEB_PORT)),--web-port '$(MODAL_WEB_PORT)') \
 		--persist '$(CLOUDMAKE_NATIVE_PERSIST)' --volume '$(MODAL_VOLUME)' \
 		--remote-root '$(REMOTE_ROOT)' --ready-timeout '$(MODAL_READY_TIMEOUT)' \

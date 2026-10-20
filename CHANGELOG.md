@@ -5,6 +5,8 @@ once a version is published as a GitHub release.
 
 ## Unreleased
 
+- Add `MODAL_APT` and `MODAL_PIP` to extend the Modal Sandbox image with
+  Debian and pip packages; a change requires `--stop`.
 - Refuse SSH synchronization when remote ownership cannot be read; pin Colab
   checkpoint attachment to its previous owner until successful publication;
   and update Modal ownership even when source is unchanged.

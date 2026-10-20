@@ -70,6 +70,9 @@ class Image:
     def apt_install(self, *packages: str) -> "Image":
         return Image(f"{self.description}+apt:{','.join(packages)}")
 
+    def pip_install(self, *packages: str) -> "Image":
+        return Image(f"{self.description}+pip:{','.join(packages)}")
+
 
 class _Process:
     def __init__(self, command: list[str], disconnect: bool) -> None:
