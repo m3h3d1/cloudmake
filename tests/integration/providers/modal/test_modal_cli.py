@@ -306,6 +306,7 @@ def test_extra_packages_extend_the_default_image(prototype: Path, tmp_path: Path
     assert calls(tmp_path, "create")[0]["image"] == (
         "debian_slim+apt:make,curl,ca-certificates,xz-utils+apt:git+pip:torch==2.8.0,numpy<2"
     )
+    assert len(calls(tmp_path, "enable_output")) == 1
     assert changed.returncode != 0
     assert "different configuration" in changed.stdout
     assert bad.returncode != 0

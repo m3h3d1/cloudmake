@@ -125,19 +125,20 @@ def start(arguments: argparse.Namespace) -> int:
                 arguments.volume, create_if_missing=True, version=2
             )
         try:
-            sandbox = modal.Sandbox.create(
-                app=app,
-                name=arguments.name,
-                image=image_for(arguments),
-                gpu=arguments.gpu or None,
-                cpu=arguments.cpu,
-                memory=arguments.memory,
-                timeout=arguments.timeout,
-                idle_timeout=arguments.idle_timeout,
-                encrypted_ports=[arguments.web_port] if arguments.web_port else [],
-                volumes=volumes,
-                tags={"cloudmake-sandbox": arguments.name},
-            )
+            with modal.enable_output():
+                sandbox = modal.Sandbox.create(
+                    app=app,
+                    name=arguments.name,
+                    image=image_for(arguments),
+                    gpu=arguments.gpu or None,
+                    cpu=arguments.cpu,
+                    memory=arguments.memory,
+                    timeout=arguments.timeout,
+                    idle_timeout=arguments.idle_timeout,
+                    encrypted_ports=[arguments.web_port] if arguments.web_port else [],
+                    volumes=volumes,
+                    tags={"cloudmake-sandbox": arguments.name},
+                )
         except modal_exception.ResourceExhaustedError as error:
             update(state, {"provider_state": "failed", "failure_code": "capacity_unavailable", "retry_safe": True})
             print(f"[modal] Capacity is temporarily unavailable: {error}", file=sys.stderr)

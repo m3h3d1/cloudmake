@@ -7,6 +7,7 @@ Volume); other remote paths map into a per-sandbox directory.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -35,6 +36,12 @@ def _sandboxes() -> dict:
 def _save(sandboxes: dict) -> None:
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / "sandboxes.json").write_text(json.dumps(sandboxes), encoding="utf-8")
+
+
+@contextlib.contextmanager
+def enable_output():
+    _log("enable_output")
+    yield
 
 
 class App:
