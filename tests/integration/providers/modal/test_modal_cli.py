@@ -256,6 +256,17 @@ def test_capacity_shortage_is_temporary(prototype: Path, tmp_path: Path) -> None
     assert "Capacity is temporarily unavailable" in result.stdout
 
 
+def test_blocked_readiness_probe_stops_at_the_deadline(prototype: Path, tmp_path: Path) -> None:
+    project = consumer(tmp_path)
+    env = environment(tmp_path, FAKE_MODAL_EXEC_HANG="command -v make", MODAL_READY_TIMEOUT="2")
+
+    result = cloudmake(prototype, project, env, "-b", "modal", "smoke", check=False)
+
+    assert result.returncode == 75
+    assert "did not provide make and tar before the readiness deadline" in result.stdout
+    assert len(calls(tmp_path, "terminate")) == 1
+
+
 def test_shell_hands_over_to_modal_shell(prototype: Path, tmp_path: Path) -> None:
     project = consumer(tmp_path)
     env = environment(tmp_path)

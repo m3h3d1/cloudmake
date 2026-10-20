@@ -13,7 +13,9 @@ import base64
 import json
 import os
 from pathlib import Path
+import queue
 import sys
+import threading
 import time
 from urllib.parse import urlencode
 
@@ -88,14 +90,24 @@ def run(sandbox, command: str, *, stream: bool) -> int:
     return process.returncode
 
 
+def probe(sandbox, results: queue.Queue) -> None:
+    try:
+        results.put(run(sandbox, "command -v make && command -v tar", stream=False))
+    except modal_exception.Error:
+        results.put(None)
+
+
 def wait_ready(sandbox, deadline_seconds: float) -> bool:
+    # exec blocks while Modal loads the image, so bound each probe by the deadline.
     deadline = time.monotonic() + deadline_seconds
     while True:
+        results: queue.Queue = queue.Queue()
+        threading.Thread(target=probe, args=(sandbox, results), daemon=True).start()
         try:
-            if run(sandbox, "command -v make && command -v tar", stream=False) == 0:
+            if results.get(timeout=max(deadline - time.monotonic(), 0.1)) == 0:
                 return True
-        except modal_exception.Error:
-            pass
+        except queue.Empty:
+            return False
         if time.monotonic() >= deadline:
             return False
         time.sleep(3)
@@ -111,6 +123,10 @@ def start(arguments: argparse.Namespace) -> int:
             current = json.loads(sandbox.filesystem.read_text(CONFIG_FILE))
         except modal_exception.Error:
             current = None
+        if current is None:
+            raise ControlError(
+                f"Modal sandbox {arguments.name!r} did not finish starting; stop it first with: cloudmake --stop"
+            )
         if current != config:
             raise ControlError(
                 f"Modal sandbox {arguments.name!r} runs with a different configuration "
@@ -145,6 +161,7 @@ def start(arguments: argparse.Namespace) -> int:
             return EX_TEMPFAIL
         created = True
         update(state, {"session_created": True})
+        print("[modal] Waiting for the sandbox to start...", flush=True)
     if not wait_ready(sandbox, arguments.ready_timeout):
         if created:
             sandbox.terminate()

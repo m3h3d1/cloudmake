@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 import uuid
 
 from . import exception
@@ -178,6 +179,9 @@ class Sandbox:
     def exec(self, *command: str, **_) -> _Process:
         marker = os.environ.get("FAKE_MODAL_EXEC_DISCONNECT")
         _log("exec", name=self.name, command=list(command))
+        hang = os.environ.get("FAKE_MODAL_EXEC_HANG")
+        if hang and hang in command[-1]:
+            threading.Event().wait()
         return _Process(list(command), bool(marker) and marker in command[-1])
 
     def create_connect_token(self, *, port: int, **_):
