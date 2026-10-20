@@ -135,7 +135,7 @@ class Sandbox:
         return cls(name, record["id"])
 
     @classmethod
-    def create(cls, *, app, name, image, gpu, cpu, memory, timeout, idle_timeout, volumes, tags, **_) -> "Sandbox":
+    def create(cls, *, app, name, image, gpu, cpu, memory, timeout, idle_timeout, volumes, tags, encrypted_ports=(), **_) -> "Sandbox":
         if os.environ.get("FAKE_MODAL_CAPACITY"):
             raise exception.ResourceExhaustedError("no capacity")
         sandboxes = _sandboxes()
@@ -151,6 +151,7 @@ class Sandbox:
             "create", app=app.name, name=name, image=image.description, gpu=gpu,
             cpu=cpu, memory=memory, timeout=timeout, idle_timeout=idle_timeout,
             volumes={path: volume.name for path, volume in volumes.items()}, tags=tags,
+            encrypted_ports=list(encrypted_ports),
         )
         return cls(name, object_id)
 
@@ -168,3 +169,7 @@ class Sandbox:
         marker = os.environ.get("FAKE_MODAL_EXEC_DISCONNECT")
         _log("exec", name=self.name, command=list(command))
         return _Process(list(command), bool(marker) and marker in command[-1])
+
+    def create_connect_token(self, *, port: int, **_):
+        _log("connect-token", name=self.name, port=port)
+        return type("Credentials", (), {"url": f"https://{self.object_id}.modal.test", "token": "test-token"})()

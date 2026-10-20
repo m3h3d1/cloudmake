@@ -266,3 +266,42 @@ def test_shell_hands_over_to_modal_shell(prototype: Path, tmp_path: Path) -> Non
     assert sandbox_id
     assert "fake-shell sb-" in result.stdout
     assert "Project source:" in result.stdout
+
+
+def test_open_creates_an_authenticated_modal_url(prototype: Path, tmp_path: Path) -> None:
+    project = consumer(tmp_path)
+    env = environment(tmp_path, MODAL_WEB_PORT="8188")
+
+    result = cloudmake(prototype, project, env, "-b", "modal", "--open")
+
+    assert "https://sb-" in result.stdout
+    assert "_modal_connect_token=test-token" in result.stdout
+    created = calls(tmp_path, "create")[0]
+    assert created["encrypted_ports"] == [8188]
+    assert calls(tmp_path, "connect-token") == [{"event": "connect-token", "name": created["name"], "port": 8188}]
+    assert "test-token" not in json.dumps(calls(tmp_path, "create"))
+
+
+def test_open_requires_a_configured_port(prototype: Path, tmp_path: Path) -> None:
+    project = consumer(tmp_path)
+    env = environment(tmp_path)
+
+    result = cloudmake(prototype, project, env, "-b", "modal", "--open", check=False)
+
+    assert result.returncode != 0
+    assert "MODAL_WEB_PORT is required" in result.stdout
+    assert calls(tmp_path, "create") == []
+
+
+def test_reuse_refuses_a_changed_web_port(prototype: Path, tmp_path: Path) -> None:
+    project = consumer(tmp_path)
+    env = environment(tmp_path, MODAL_WEB_PORT="8188")
+
+    cloudmake(prototype, project, env, "-b", "modal", "smoke")
+    changed = cloudmake(
+        prototype, project, {**env, "MODAL_WEB_PORT": "8189"}, "-b", "modal", "smoke", check=False
+    )
+
+    assert changed.returncode != 0
+    assert "different configuration" in changed.stdout
+    assert len(calls(tmp_path, "create")) == 1

@@ -25,11 +25,11 @@ MODAL_CONTROL = '$(MODAL_PYTHON)' '$(CLOUDMAKE_TOOL_ROOT)/backend/modal-sandbox/
 
 .PHONY: help start status stop sync dispatch collect fetch shell open \
 	_modal-start _modal-sync _modal-sync-unlocked _modal-execute _modal-collect \
-	_modal-fetch _modal-shell _modal-stop
+	_modal-fetch _modal-shell _modal-open _modal-stop
 
 help:
 	@echo 'Usage: make BACKEND=modal-sandbox <target>'
-	@echo 'Engine operations: start status stop sync collect fetch shell'
+	@echo 'Engine operations: start status stop sync collect fetch shell open'
 	@echo '                   sync-dry-run prerequisites doctor backend-info'
 	@echo 'Internal project-target entry point: dispatch (launcher managed)'
 
@@ -67,14 +67,15 @@ shell: doctor
 	@$(CLOUDMAKE_WITH_LOCK) $(MAKE) --no-print-directory _modal-shell
 
 open:
-	@echo 'The $(BACKEND) backend has no browser interface; run: cloudmake --shell' >&2
-	@exit 2
+	@if test -z '$(MODAL_WEB_PORT)'; then echo 'MODAL_WEB_PORT is required; restart with MODAL_WEB_PORT=PORT.' >&2; exit 2; fi
+	@$(CLOUDMAKE_WITH_LOCK) $(MAKE) --no-print-directory _modal-open
 
 _modal-start: ensure-owner
 	@mkdir -p '$(MODAL_STATE_DIR)'
 	@$(MODAL_CONTROL) start --gpu '$(MODAL_GPU)' --cpu '$(MODAL_CPU)' \
 		--memory '$(MODAL_MEMORY)' --timeout '$(MODAL_TIMEOUT)' \
 		--idle-timeout '$(MODAL_IDLE_TIMEOUT)' --image '$(MODAL_IMAGE)' \
+		$(if $(strip $(MODAL_WEB_PORT)),--web-port '$(MODAL_WEB_PORT)') \
 		--persist '$(CLOUDMAKE_NATIVE_PERSIST)' --volume '$(MODAL_VOLUME)' \
 		--remote-root '$(REMOTE_ROOT)' --ready-timeout '$(MODAL_READY_TIMEOUT)' \
 		--operation-state '$(CLOUDMAKE_OPERATION_STATE)' \
@@ -194,6 +195,9 @@ _modal-fetch: ensure-owner
 
 _modal-shell: _modal-start
 	@$(MODAL_CONTROL) shell --modal-bin '$(MODAL_BIN)' --source '$(REMOTE_SRC)'
+
+_modal-open: _modal-start
+	@$(MODAL_CONTROL) connect-token --port '$(MODAL_WEB_PORT)'
 
 _modal-stop: ensure-owner
 	@$(MODAL_CONTROL) stop

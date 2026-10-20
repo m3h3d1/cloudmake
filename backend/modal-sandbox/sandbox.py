@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import sys
 import time
+from urllib.parse import urlencode
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[2] / "core"))
 from run_state import update
@@ -53,6 +54,7 @@ def requested_config(arguments: argparse.Namespace) -> dict[str, object]:
         "cpu": arguments.cpu,
         "memory": arguments.memory,
         "image": arguments.image or None,
+        "web_port": arguments.web_port or None,
         "persist": arguments.persist == "1",
         "volume": arguments.volume if arguments.persist == "1" else None,
         "remote_root": arguments.remote_root,
@@ -121,6 +123,7 @@ def start(arguments: argparse.Namespace) -> int:
                 memory=arguments.memory,
                 timeout=arguments.timeout,
                 idle_timeout=arguments.idle_timeout,
+                encrypted_ports=[arguments.web_port] if arguments.web_port else [],
                 volumes=volumes,
                 tags={"cloudmake-sandbox": arguments.name},
             )
@@ -206,6 +209,12 @@ def shell(arguments: argparse.Namespace) -> int:
     return 1
 
 
+def connect_token(arguments: argparse.Namespace) -> int:
+    credentials = running(arguments.app, arguments.name).create_connect_token(port=arguments.port)
+    print(f"{credentials.url}?{urlencode({'_modal_connect_token': credentials.token})}")
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     root.add_argument("--app", required=True)
@@ -219,6 +228,7 @@ def parser() -> argparse.ArgumentParser:
     begin.add_argument("--timeout", type=int, required=True)
     begin.add_argument("--idle-timeout", type=int, required=True)
     begin.add_argument("--image", default="")
+    begin.add_argument("--web-port", type=int, default=0)
     begin.add_argument("--persist", choices=("0", "1"), default="0")
     begin.add_argument("--volume", required=True)
     begin.add_argument("--remote-root", required=True)
@@ -250,6 +260,10 @@ def parser() -> argparse.ArgumentParser:
     interactive.add_argument("--modal-bin", default="modal")
     interactive.add_argument("--source", required=True)
     interactive.set_defaults(handler=shell)
+
+    connect = commands.add_parser("connect-token")
+    connect.add_argument("--port", type=int, required=True)
+    connect.set_defaults(handler=connect_token)
     return root
 
 

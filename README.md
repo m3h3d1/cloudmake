@@ -1610,8 +1610,12 @@ project-generated state such as downloaded models or build trees survives
 `--stop` and the 24-hour limit. Remove it explicitly with
 `modal volume delete cloudmake-<sandbox>`. `--shell` opens `modal shell` in the
 running sandbox. `--fetch` never allocates a sandbox. `--image`,
-`--devcontainer`, port forwarding, `--retry-for`, and `--environment` are not
-supported in this release.
+`--devcontainer`, `--retry-for`, and `--environment` are not supported in this
+release. Set `MODAL_WEB_PORT=PORT` before starting a sandbox to enable an
+authenticated browser route, then run `cloudmake --open` to print a Modal
+Connect Token URL. Treat that URL as a credential: it is not recorded by
+Cloudmake and must not be shared. Changing the port requires `cloudmake --stop`
+before restarting the sandbox.
 
 ## Backend behavior summary
 

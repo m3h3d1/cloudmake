@@ -3499,7 +3499,7 @@ def test_engine_defines_no_project_target_shortcuts(
             "native-persistence",
             "provider-managed",
             "ephemeral",
-            "no",
+            "conditional",
             "yes",
         ),
     ],
