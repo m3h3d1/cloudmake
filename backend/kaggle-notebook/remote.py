@@ -611,18 +611,21 @@ def main() -> int:
                 XDG_CONFIG_HOME=os.fspath(home / ".config"),
                 XDG_STATE_HOME=os.fspath(home / ".local/state"),
             )
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 [
                     os.fspath(Path(os.sys.executable)), os.fspath(Path(__file__).resolve()),
                     "--internal-run", os.fspath(arguments.control), os.fspath(source),
                     os.fspath(cache), os.fspath(home), os.fspath(arguments.oci_runner),
                     os.fspath(oci_result),
                 ],
-                check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 env=remote_environment,
             )
-            print(completed.stdout, end="", flush=True)
-            log.write(completed.stdout)
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                log.write(line)
+                log.flush()
+            completed = subprocess.CompletedProcess(process.args, process.wait())
         target_submission = "submitted"
         target_status = "succeeded" if completed.returncode == 0 else "target-failed"
         # An OCI infrastructure receipt overrides the process-code classification.

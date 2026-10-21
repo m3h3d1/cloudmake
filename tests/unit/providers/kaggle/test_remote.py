@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import select
 import shutil
 import subprocess
 import tarfile
@@ -164,6 +165,44 @@ def test_target_failure_is_receipted_without_checkpoint_or_runner_traceback(tmp_
     )
     assert checkpoint["status"] == "skipped"
     assert checkpoint["outcome"] == "target-failed"
+
+
+def test_target_output_streams_before_the_target_finishes(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "Makefile").write_text(
+        "stream:\n\t@echo first\n\t@while [ ! -f release ]; do sleep 0.1; done\n\t@echo second\n",
+        encoding="utf-8",
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "working").mkdir()
+    archive, manifest = source_snapshot(project, run_dir)
+    run_control = run_dir / "control.json"
+    value = control(manifest, active="tester/cloudmake-ws-0123456789abcdef01234567-a", target="stream")
+    run_control.write_text(json.dumps(dict(value, checkpoint=False)), encoding="utf-8")
+    process = subprocess.Popen(
+        [
+            "python3", REMOTE, "--control", run_control, "--source-archive", archive,
+            "--oci-runner", PROJECT_ROOT / "core" / "oci_runner.py",
+            "--root", run_dir / "root", "--working", run_dir / "working",
+            "--input-root", tmp_path / "input",
+        ],
+        cwd=run_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+    try:
+        seen = ""
+        while "first" not in seen:
+            assert select.select([process.stdout], [], [], 30)[0], seen
+            seen += process.stdout.readline()
+        (run_dir / "root/workspace/src/release").touch()
+        rest, _ = process.communicate(timeout=30)
+    finally:
+        process.kill()
+    assert process.returncode == 0, seen + rest
+    assert "second" in rest
+    log = (run_dir / "working/cloud-build.log").read_text()
+    assert log.index("first") < log.index("second")
 
 
 def test_requested_network_failure_stops_before_target(tmp_path: Path, monkeypatch) -> None:
