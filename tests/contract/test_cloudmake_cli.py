@@ -1389,6 +1389,24 @@ def test_no_checkpoint_disables_persisted_selection(
         assert_assignment(call, "CLOUDMAKE_CHECKPOINT", "0")
 
 
+def test_one_off_backend_persistence_does_not_change_saved_selection(
+    tmp_path: Path, fake_bin: Path
+) -> None:
+    project = make_project(tmp_path / "project")
+    environment, log = contract_environment(tmp_path, fake_bin)
+    invoke(project, environment, "--use", "colab", "--persist")
+
+    one_off = invoke(project, environment, "-b", "colab", "--no-persist", "build")
+    invoke(project, environment, "test")
+
+    assert "subsequent targets reuse this selection" not in one_off.stdout
+    first, second = engine_calls(log)
+    assert_assignment(first, "CLOUDMAKE_CHECKPOINT", "0")
+    assert_assignment(second, "CLOUDMAKE_CHECKPOINT", "1")
+    preference = next((tmp_path / "config" / "projects").glob("*.json"))
+    assert json.loads(preference.read_text(encoding="utf-8"))["persistent_workspace"] is True
+
+
 def test_persist_alias_registers_and_lists_a_persistent_workspace(
     tmp_path: Path, fake_bin: Path
 ) -> None:

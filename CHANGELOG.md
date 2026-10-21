@@ -5,6 +5,8 @@ once a version is published as a GitHub release.
 
 ## Unreleased
 
+- Keep `--persist`/`--no-persist` to the current run when `-b` selects a
+  one-off backend, matching `--gpu`, so the saved selection is unchanged.
 - Add `MODAL_APT` and `MODAL_PIP` to extend the Modal Sandbox image with
   Debian and pip packages; a change requires `--stop`.
 - Refuse SSH synchronization when remote ownership cannot be read; pin Colab

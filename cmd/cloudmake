@@ -752,6 +752,7 @@ Cloud operations: --use BACKEND, --doctor, --backends, --start, --sync,
 Managed checkpoint workspaces: --workspaces; --workspace {{show,attach,purge}} [ID]
                                (purge requires --force)
 Persistence selection: --persist/--no-persist are local and per project;
+                       with -b they apply to that run only;
                        --checkpoint/--no-checkpoint remain compatible aliases.
 Persistence modes: Colab notebook=encrypted checkpoint; deprecated Kaggle=
                    experimental private-output checkpoint;
@@ -2783,6 +2784,7 @@ def run(arguments: list[str]) -> int:
         )
     if (
         options["checkpoint"] is not None
+        and options["backend"] is None
         and engine_target in {"dispatch", "collect", "start"}
     ):
         persist_invocation_checkpoint(
