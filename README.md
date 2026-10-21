@@ -664,7 +664,7 @@ Common options:
 | `--host HOST` | Select a user-managed OpenSSH alias for the `ssh` backend. |
 | `--gpu`, `--gpu=TYPE` | Select the default or a named GPU where supported; save it for the selected project unless `-b` is an explicit one-off override. |
 | `--cpu` | Select a CPU runtime; save it for the selected project under the same rule. |
-| `--persist`, `--no-persist` | Enable or disable the selected backend's persistent-workspace mode and save the choice for later targets. With `-b`, the choice applies to that run only, like `--gpu`. The older `--checkpoint` and `--no-checkpoint` spellings remain compatible aliases. |
+| `--persist`, `--no-persist` | Enable or disable the selected backend's persistent-workspace mode and save the choice for later targets. The choice is remembered per backend, so `-b kaggle --no-persist` does not change Modal's. The older `--checkpoint` and `--no-checkpoint` spellings remain compatible aliases. |
 | `--devcontainer[=PATH]` | Select a capability-negotiated standard Dev Container workstation; discover the standard project path when `PATH` is omitted. |
 | `--image REF@sha256:DIGEST` | Select a digest-pinned OCI image as the project's Make execution environment; this remains the image-only shorthand. |
 | `--device CDI_NAME` | Request a CDI qualified device such as `nvidia.com/gpu=all`; repeat for multiple devices. |

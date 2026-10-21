@@ -752,7 +752,7 @@ Cloud operations: --use BACKEND, --doctor, --backends, --start, --sync,
 Managed checkpoint workspaces: --workspaces; --workspace {{show,attach,purge}} [ID]
                                (purge requires --force)
 Persistence selection: --persist/--no-persist are local and per project;
-                       with -b they apply to that run only;
+                       the choice is remembered per backend;
                        --checkpoint/--no-checkpoint remain compatible aliases.
 Persistence modes: Colab notebook=encrypted checkpoint; deprecated Kaggle=
                    experimental private-output checkpoint;
@@ -1277,6 +1277,9 @@ def detach_workspace_mappings(
         if not active and not mapped:
             continue
         if isinstance(workspace_ids, dict):
+            for name, value in workspace_ids.items():
+                if value == workspace_id and isinstance(saved.get("persistent_workspaces"), dict):
+                    saved["persistent_workspaces"][name] = False
             remaining = {
                 name: value for name, value in workspace_ids.items()
                 if value != workspace_id
@@ -1289,6 +1292,8 @@ def detach_workspace_mappings(
             saved.pop("workspace_id", None)
             saved.pop("checkpoint", None)
             saved["persistent_workspace"] = False
+            if isinstance(saved.get("persistent_workspaces"), dict) and saved.get("backend"):
+                saved["persistent_workspaces"][saved["backend"]] = False
         pending = saved.get("workspace_adoption")
         if isinstance(pending, dict) and pending.get("workspace_id") == workspace_id:
             saved.pop("workspace_adoption", None)
@@ -1508,6 +1513,23 @@ def resolve_gcp_resource(config_home: Path, key: str) -> dict[str, str] | None:
     return selected
 
 
+def saved_persistence(saved: dict[str, Any], backend: str) -> Any:
+    by_backend = saved.get("persistent_workspaces")
+    if isinstance(by_backend, dict) and backend in by_backend:
+        return by_backend[backend]
+    # Single project-wide value from earlier releases and prototypes.
+    return saved.get("persistent_workspace", saved.get("checkpoint"))
+
+
+def remember_persistence(saved: dict[str, Any], backend: str, enabled: bool) -> None:
+    by_backend = saved.get("persistent_workspaces")
+    by_backend = dict(by_backend) if isinstance(by_backend, dict) else {}
+    by_backend[backend] = enabled
+    saved["persistent_workspaces"] = by_backend
+    saved["persistent_workspace"] = enabled
+    saved["checkpoint"] = enabled
+
+
 def resolve_preferences(
     project: Path, options: dict[str, Any], config_home: Path, key: str
 ) -> tuple[str, str | None, bool, str | None, bool, str]:
@@ -1532,10 +1554,7 @@ def resolve_preferences(
 
     checkpoint: Any = options["checkpoint"]
     if checkpoint is None:
-        if "persistent_workspace" in project_config:
-            checkpoint = project_config["persistent_workspace"]
-        elif "checkpoint" in project_config:  # early stateful prototype compatibility
-            checkpoint = project_config["checkpoint"]
+        checkpoint = saved_persistence(project_config, backend)
     if checkpoint is None:
         checkpoint = False
     if not isinstance(checkpoint, bool):
@@ -2144,8 +2163,7 @@ def persist_invocation_checkpoint(
 ) -> None:
     path = config_home / "projects" / f"{key}.json"
     saved = load_json(path)
-    saved["persistent_workspace"] = enabled
-    saved["checkpoint"] = enabled
+    remember_persistence(saved, backend, enabled)
     if enabled and mode == "checkpoint":
         configured = saved.get("workspace_ids", {})
         if not isinstance(configured, dict):
@@ -2460,9 +2478,9 @@ def run(arguments: list[str]) -> int:
         saved = load_json(path)
         global_config = load_json(config_home / "config.json")
         project_config = saved if not options["global"] else {}
-        configured_persistence: Any = saved.get(
-            "persistent_workspace", saved.get("checkpoint", False)
-        )
+        configured_persistence: Any = saved_persistence(saved, backend)
+        if configured_persistence is None:
+            configured_persistence = False
         if not isinstance(configured_persistence, bool):
             raise UsageError(
                 "configured persistent-workspace selection must be true or false"
@@ -2532,8 +2550,7 @@ def run(arguments: list[str]) -> int:
         if selected_colab_session is not None:
             saved["colab_session"] = selected_colab_session
         if options["checkpoint"] is not None:
-            saved["persistent_workspace"] = options["checkpoint"]
-            saved["checkpoint"] = options["checkpoint"]
+            remember_persistence(saved, backend, options["checkpoint"])
         if (
             selected_persistence
             and persistence_mode == "checkpoint"
@@ -2784,7 +2801,6 @@ def run(arguments: list[str]) -> int:
         )
     if (
         options["checkpoint"] is not None
-        and options["backend"] is None
         and engine_target in {"dispatch", "collect", "start"}
     ):
         persist_invocation_checkpoint(
