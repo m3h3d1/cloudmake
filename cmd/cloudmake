@@ -634,14 +634,29 @@ def parse_invocation(arguments: list[str]) -> tuple[dict[str, Any], list[str]]:
             options["host_template"] = argument.split("=", 1)[1]
             index += 1
         elif argument == "--gpu":
+            if (options["accelerator"] or "").startswith("tpu-"):
+                raise UsageError("--gpu cannot be combined with --tpu")
             options["accelerator_set"] = True
             options["accelerator"] = "T4"
             index += 1
         elif argument.startswith("--gpu="):
+            if (options["accelerator"] or "").startswith("tpu-"):
+                raise UsageError("--gpu cannot be combined with --tpu")
             options["accelerator"] = argument.split("=", 1)[1] or "T4"
             options["accelerator_set"] = True
             index += 1
+        elif argument == "--tpu" or argument.startswith("--tpu="):
+            if options["accelerator_set"]:
+                raise UsageError("--tpu cannot be combined with --gpu or --cpu")
+            value = "v5e1" if argument == "--tpu" else argument.split("=", 1)[1]
+            if value not in {"v5e1", "v6e1"}:
+                raise UsageError("--tpu supports v5e1 or v6e1")
+            options["accelerator"] = f"tpu-{value}"
+            options["accelerator_set"] = True
+            index += 1
         elif argument == "--cpu":
+            if (options["accelerator"] or "").startswith("tpu-"):
+                raise UsageError("--cpu cannot be combined with --tpu")
             options["accelerator"] = ""
             options["accelerator_set"] = True
             index += 1
@@ -740,7 +755,7 @@ Usage: cloudmake [options] TARGET [NAME=value ...]
 Every positional name is passed unchanged to the project Makefile. Cloudmake
 reserves no project target names.
 
-Project options: -b BACKEND, -C DIR, -j N, --host HOST, --gpu[=TYPE], --cpu,
+Project options: -b BACKEND, -C DIR, -j N, --host HOST, --gpu[=TYPE], --tpu[=TYPE], --cpu,
                  --persist, --no-persist, --image REF@sha256:DIGEST,
                  --devcontainer[=PATH], --device CDI_NAME, --no-devices, --native,
                  --retry-for=DURATION, --idempotent,
@@ -1605,6 +1620,13 @@ def validate_backend_oci_selection(
     *, backend: str, runner: str, devices: list[str], accelerator: Any
 ) -> list[str]:
     runtimes = backend_oci_runtimes(backend)
+    if (
+        backend == "colab-notebook"
+        and isinstance(accelerator, str)
+        and accelerator.startswith("tpu-")
+        and runner != "native"
+    ):
+        raise UsageError("Colab TPU targets require the native runner")
     if runner in {"native", "devcontainer-native"}:
         return runtimes
     native = backend_oci_native(backend)
@@ -2116,7 +2138,11 @@ def engine_command(
             "lightning-studio-ssh": "LIGHTNING_MACHINE",
             "modal-sandbox": "MODAL_GPU",
         }.get(backend, "CLOUDMAKE_GPU")
-        variables.append(f"{variable}={accelerator or ''}")
+        if backend == "colab-notebook" and (accelerator or "").startswith("tpu-"):
+            variables.append(f"COLAB_TPU={accelerator[4:]}")
+            variables.append("COLAB_GPU=")
+        else:
+            variables.append(f"{variable}={accelerator or ''}")
     if remote_target is not None:
         variables.append(f"REMOTE_TARGET_B64={encoded_value(remote_target)}")
     if remote_collect_dir is not None:
@@ -2468,6 +2494,8 @@ def run(arguments: list[str]) -> int:
             raise UsageError("invalid accelerator name")
         if accelerator and backend not in GPU_BACKENDS:
             raise UsageError(f"backend {backend!r} does not support accelerator requests")
+        if accelerator and accelerator.startswith("tpu-") and backend != "colab-notebook":
+            raise UsageError("--tpu is supported only by the Colab notebook backend")
         if options["host"] is not None and backend != "host-ssh":
             raise UsageError("--host is valid only with the ssh backend")
         path = (
@@ -2704,6 +2732,8 @@ def run(arguments: list[str]) -> int:
         )
     if accelerator and backend not in GPU_BACKENDS:
         raise UsageError(f"backend {backend!r} does not support accelerator requests")
+    if accelerator and accelerator.startswith("tpu-") and backend != "colab-notebook":
+        raise UsageError("--tpu is supported only by the Colab notebook backend")
     persistence_mode = validate_persistence(backend, checkpoint)
     oci_runtimes = validate_backend_oci_selection(
         backend=backend, runner=runner, devices=devices, accelerator=accelerator

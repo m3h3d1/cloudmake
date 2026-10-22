@@ -40,7 +40,9 @@ def profile_tag() -> str:
     system = re.sub(r"[^a-z0-9_-]", "-", platform.system().lower())
     machine = re.sub(r"[^a-z0-9_-]", "-", platform.machine().lower())
     accelerator = (
-        "nvidia"
+        "tpu"
+        if Path("/dev/accel0").exists()
+        else "nvidia"
         if Path("/proc/driver/nvidia/version").is_file()
         or shutil.which("nvidia-smi") is not None
         else "cpu"

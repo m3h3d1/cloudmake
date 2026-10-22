@@ -128,6 +128,18 @@ def session_is_listed(output: str, session: str) -> bool:
     )
 
 
+def session_matches_accelerator(
+    output: str, session: str, accelerator: str, variant: str
+) -> bool:
+    prefix = f"[{session}]"
+    return any(
+        line.startswith(prefix + " ")
+        and f"Hardware: {accelerator.upper()}" in line
+        and f"Variant: {variant}" in line
+        for line in output.splitlines()
+    )
+
+
 def tuning(name: str, default: float, *, minimum: float = 0.0) -> float:
     raw = os.environ.get(name)
     if raw is None:
@@ -201,6 +213,23 @@ def allocate(arguments: argparse.Namespace) -> int:
         )
         return exit_status(sessions.returncode)
     if session_is_listed(sessions.stdout, arguments.session):
+        requested = arguments.tpu or arguments.gpu
+        variant = "TPU" if arguments.tpu else "GPU"
+        if requested and not session_matches_accelerator(
+            sessions.stdout, arguments.session, requested, variant
+        ):
+            print(
+                f"[cloudmake] session {arguments.session!r} is not confirmed as "
+                f"{variant} {requested}; stop it before switching accelerators",
+                file=sys.stderr,
+            )
+            write_receipt(
+                arguments.result,
+                session=arguments.session,
+                attempts=attempts,
+                outcome="accelerator-mismatch",
+            )
+            return 2
         arguments.resource_state.write_text("reused\n", encoding="utf-8")
         write_receipt(
             arguments.result,
@@ -213,6 +242,8 @@ def allocate(arguments: argparse.Namespace) -> int:
     command = [arguments.client, "new", "-s", arguments.session]
     if arguments.gpu:
         command.extend(["--gpu", arguments.gpu])
+    if arguments.tpu:
+        command.extend(["--tpu", arguments.tpu])
 
     while True:
         if attempts and time.monotonic() >= deadline:
@@ -286,11 +317,14 @@ def main() -> int:
     parser.add_argument("--client", required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--gpu", default="")
+    parser.add_argument("--tpu", default="")
     parser.add_argument("--retry-seconds", required=True, type=int)
     parser.add_argument("--resource-state", required=True, type=Path)
     parser.add_argument("--result", required=True, type=Path)
     parser.add_argument("--state-file", type=Path)
     arguments = parser.parse_args()
+    if arguments.gpu and arguments.tpu:
+        parser.error("--gpu and --tpu cannot be combined")
     if arguments.retry_seconds < 0:
         parser.error("--retry-seconds must not be negative")
     arguments.resource_state.parent.mkdir(parents=True, exist_ok=True)

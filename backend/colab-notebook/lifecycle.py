@@ -58,6 +58,7 @@ def main() -> int:
     parser.add_argument("--client", required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--gpu")
+    parser.add_argument("--tpu")
     parser.add_argument("--probe-file", type=Path, required=True)
     parser.add_argument("--command-timeout", type=float, required=True)
     parser.add_argument("--ready-timeout", type=float, required=True)
@@ -155,6 +156,8 @@ def main() -> int:
             command = [*base, "new", "-s", arguments.session]
             if arguments.gpu:
                 command.extend(["--gpu", arguments.gpu])
+            if arguments.tpu:
+                command.extend(["--tpu", arguments.tpu])
             allocated = run_client(command, lifecycle_timeout)
             if allocated.returncode != 0:
                 record_failure(

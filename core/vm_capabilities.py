@@ -206,9 +206,10 @@ def device_record(path: str) -> dict[str, Any]:
 
 
 def accelerator_record() -> dict[str, Any]:
+    tpu = {"status": "available"} if Path("/dev/accel0").exists() else {"status": "unavailable"}
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi is None:
-        return {"nvidia": {"status": "unavailable"}}
+        return {"nvidia": {"status": "unavailable"}, "tpu": tpu}
     record = run_probe(
         [
             nvidia_smi,
@@ -221,7 +222,7 @@ def accelerator_record() -> dict[str, Any]:
         fields = [part.strip() for part in record["detail"].split(",", 2)]
         if len(fields) == 3:
             record.update(name=fields[0], memory_mib=fields[1], driver=fields[2])
-    return {"nvidia": record}
+    return {"nvidia": record, "tpu": tpu}
 
 
 def oci_runtime_record() -> dict[str, Any]:
@@ -373,6 +374,8 @@ def render(profile: dict[str, Any]) -> None:
     ]
     if accelerator.get("status") == "available" and accelerator.get("name"):
         fields.append(f"gpu={accelerator['name']}")
+    if profile.get("accelerators", {}).get("tpu", {}).get("status") == "available":
+        fields.append("tpu=available")
     print("[cloudmake] environment " + " ".join(fields))
     filesystem = profile.get("filesystem", {})
     isolation = profile.get("isolation", {})

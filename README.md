@@ -603,9 +603,13 @@ Different project paths therefore receive different defaults. Existing local
 state created with the former `cuda-build` default remains compatible and is
 reused with a migration notice.
 
+For a Colab TPU, use `cloudmake --use colab --tpu=v5e1` (or `v6e1`). Stop an
+existing session before switching hardware; cloudmake will not reuse a session
+that it cannot confirm has the requested TPU.
+
 `--cpu` changes the saved accelerator preference in the same way. An explicit
 `-b` remains a one-invocation backend override and does not change saved
-selection. Cloudmake reports whenever `--use`, `--gpu`, `--cpu`, or `--start`
+selection. Cloudmake reports whenever `--use`, `--gpu`, `--tpu`, `--cpu`, or `--start`
 changes or establishes reusable project state.
 
 ### 5. Run the project
@@ -663,6 +667,7 @@ Common options:
 | `-j N` | Pass the parallel job count to Make. |
 | `--host HOST` | Select a user-managed OpenSSH alias for the `ssh` backend. |
 | `--gpu`, `--gpu=TYPE` | Select the default or a named GPU where supported; save it for the selected project unless `-b` is an explicit one-off override. |
+| `--tpu`, `--tpu=TYPE` | Select a Colab TPU (`v5e1` by default, or `v6e1`); save it like a GPU selection. |
 | `--cpu` | Select a CPU runtime; save it for the selected project under the same rule. |
 | `--persist`, `--no-persist` | Enable or disable the selected backend's persistent-workspace mode and save the choice for later targets. The choice is remembered per backend, so `-b kaggle --no-persist` does not change Modal's. The older `--checkpoint` and `--no-checkpoint` spellings remain compatible aliases. |
 | `--devcontainer[=PATH]` | Select a capability-negotiated standard Dev Container workstation; discover the standard project path when `PATH` is omitted. |

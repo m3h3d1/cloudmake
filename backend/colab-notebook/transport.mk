@@ -46,7 +46,7 @@ COLAB_PREPARED_COPY := $(COLAB_STATE_DIR)/remote-prepared
 COLAB_PREPARED_RECEIPT := $(COLAB_STATE_DIR)/prepared
 COLAB_PREPARE_TARGET_FILE := $(COLAB_STATE_DIR)/prepare-target
 
-COLAB_ACCELERATOR := $(if $(strip $(COLAB_GPU)),--gpu $(COLAB_GPU),)
+COLAB_ACCELERATOR := $(if $(strip $(COLAB_TPU)),--tpu $(COLAB_TPU),$(if $(strip $(COLAB_GPU)),--gpu $(COLAB_GPU),))
 
 .PHONY: help start status stop sync collect dispatch fetch shell open environment \
 	_colab-start _colab-sync _colab-prepare _colab-execute _colab-collect _colab-fetch \
@@ -125,6 +125,7 @@ _colab-start: ensure-owner | $(COLAB_STATE_DIR)
 	@$(PYTHON_BIN) '$(CLOUDMAKE_TOOL_ROOT)/backend/colab-notebook/allocate.py' \
 		--client '$(COLAB_BIN)' --session '$(COLAB_SESSION)' \
 		$(if $(strip $(COLAB_GPU)),--gpu '$(COLAB_GPU)') \
+		$(if $(strip $(COLAB_TPU)),--tpu '$(COLAB_TPU)') \
 		--retry-seconds '$(CLOUDMAKE_RETRY_FOR_SECONDS)' \
 		--resource-state '$(COLAB_RESOURCE_STATE)' \
 		--result '$(CLOUDMAKE_ALLOCATION_RESULT)' \
@@ -132,6 +133,7 @@ _colab-start: ensure-owner | $(COLAB_STATE_DIR)
 	@$(PYTHON_BIN) '$(CLOUDMAKE_TOOL_ROOT)/backend/colab-notebook/lifecycle.py' \
 		--client '$(COLAB_BIN)' --session '$(COLAB_SESSION)' \
 		$(if $(strip $(COLAB_GPU)),--gpu '$(COLAB_GPU)') \
+		$(if $(strip $(COLAB_TPU)),--tpu '$(COLAB_TPU)') \
 		--probe-file '$(CLOUDMAKE_TOOL_ROOT)/core/remote_prerequisites.py' \
 		--command-timeout '$(COLAB_READY_PROBE_TIMEOUT)' \
 		--ready-timeout '$(COLAB_READY_TIMEOUT)' \

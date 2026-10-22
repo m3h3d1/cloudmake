@@ -2004,6 +2004,51 @@ def test_explicit_gpu_selection_persists_and_is_reused_by_later_targets(
     assert json.loads(preference.read_text(encoding="utf-8"))["accelerator"] == "T4"
 
 
+def test_colab_tpu_selection_persists_and_is_forwarded(
+    tmp_path: Path, fake_bin: Path
+) -> None:
+    project = make_project(tmp_path / "project")
+    environment, log = contract_environment(tmp_path, fake_bin)
+    invoke(project, environment, "--use", "colab", "--tpu=v5e1")
+
+    invoke(project, environment, "build")
+
+    call = engine_calls(log)[0]
+    assert_assignment(call, "COLAB_TPU", "v5e1")
+    assert_assignment(call, "COLAB_GPU", "")
+    assert_assignment(call, "CLOUDMAKE_CONTEXT_ACCELERATOR", "tpu-v5e1")
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("--tpu=v5e1", "--gpu=T4"),
+        ("--gpu=T4", "--tpu=v5e1"),
+        ("--tpu=v5e1", "--cpu"),
+        ("--tpu=invalid",),
+    ],
+)
+def test_invalid_tpu_selection_is_rejected(
+    tmp_path: Path, fake_bin: Path, arguments: tuple[str, ...]
+) -> None:
+    project = make_project(tmp_path / "project")
+    environment, _ = contract_environment(tmp_path, fake_bin)
+
+    result = invoke(project, environment, *arguments, "build", check=False)
+
+    assert result.returncode != 0
+
+
+def test_tpu_selection_requires_colab(tmp_path: Path, fake_bin: Path) -> None:
+    project = make_project(tmp_path / "project")
+    environment, _ = contract_environment(tmp_path, fake_bin)
+
+    result = invoke(project, environment, "-b", "modal", "--tpu=v5e1", "build", check=False)
+
+    assert result.returncode != 0
+    assert "only by the Colab notebook backend" in result.stdout
+
+
 def test_saved_cloud_accelerator_does_not_leak_into_local_context(
     tmp_path: Path, fake_bin: Path
 ) -> None:
